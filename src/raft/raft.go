@@ -301,16 +301,14 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf.me = me
 
 	// Your initialization code here (2A, 2B, 2C).
-	rf.mu.Lock()
 	rf.leaderId = -1
 	rf.currentTerm = 0
 	rf.commitIndex = 0
 	rf.lastApplied = 0
 	rf.logs = append(rf.logs, LogEntry{})
 	rf.toFollower()
-	println(rf.me, "has become follower with term", rf.currentTerm)
+	//println(rf.me, "has become follower with term", rf.currentTerm)
 	rf.resetElectionTimer()
-	rf.mu.Unlock()
 
 	// initialize from state persisted before a crash
 	rf.readPersist(persister.ReadRaftState())

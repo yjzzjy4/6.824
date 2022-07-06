@@ -46,7 +46,7 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	if args.Term > rf.currentTerm {
 		rf.currentTerm = args.Term
 		rf.toFollower()
-		println(rf.me, "has become follower with term", rf.currentTerm)
+		//println(rf.me, "has become follower with term", rf.currentTerm)
 	}
 
 	reply.Term = rf.currentTerm
@@ -129,7 +129,7 @@ func (rf *Raft) startElection() {
 					if reply.Term > rf.currentTerm {
 						rf.currentTerm = reply.Term
 						rf.toFollower()
-						println(rf.me, "has become follower with term", rf.currentTerm)
+						//println(rf.me, "has become follower with term", rf.currentTerm)
 					}
 					// server are still voting
 					if rf.state == CANDIDATE {

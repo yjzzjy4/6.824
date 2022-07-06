@@ -35,7 +35,7 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	if args.Term > rf.currentTerm {
 		rf.currentTerm = args.Term
 		rf.toFollower()
-		println(rf.me, "has become follower with term", rf.currentTerm)
+		//println(rf.me, "has become follower with term", rf.currentTerm)
 	}
 
 	// todo logs don't match with leader
@@ -47,7 +47,7 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	// candidate -> follower
 	if rf.state == CANDIDATE {
 		rf.toFollower()
-		println(rf.me, "has become follower with term", rf.currentTerm)
+		//println(rf.me, "has become follower with term", rf.currentTerm)
 	}
 
 	if rf.state == FOLLOWER {
@@ -92,7 +92,7 @@ func (rf *Raft) startAppendEntries() {
 					if reply.Term > rf.currentTerm {
 						rf.currentTerm = reply.Term
 						rf.toFollower()
-						println(rf.me, "has become follower with term", rf.currentTerm)
+						//println(rf.me, "has become follower with term", rf.currentTerm)
 					}
 					// server remains leader
 					if rf.state == LEADER {
