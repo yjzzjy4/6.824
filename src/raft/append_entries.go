@@ -31,14 +31,13 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		return
 	}
 
-	// receive a higher Term, change this server to follower
+	// received a higher Term, change this server to follower
 	if args.Term > rf.currentTerm {
 		rf.currentTerm = args.Term
 		rf.toFollower()
-		//println(rf.me, "has become follower with term", rf.currentTerm)
 	}
 
-	// todo logs don't match with leader
+	// TODO logs don't match with leader
 
 	rf.leaderId = args.LeaderId
 	reply.Term = rf.currentTerm
@@ -47,13 +46,11 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	// candidate -> follower
 	if rf.state == CANDIDATE {
 		rf.toFollower()
-		//println(rf.me, "has become follower with term", rf.currentTerm)
 	}
 
 	if rf.state == FOLLOWER {
 		// reset election timer
 		rf.resetElectionTimer()
-		return
 	}
 }
 
@@ -87,14 +84,14 @@ func (rf *Raft) startAppendEntries() {
 			if ok {
 				rf.mu.Lock()
 				defer rf.mu.Unlock()
-				// non-outdated reply
+				// valid reply (non-outdated)
 				if args.Term == rf.currentTerm {
+					// higher Term discovered, step down to follower
 					if reply.Term > rf.currentTerm {
 						rf.currentTerm = reply.Term
 						rf.toFollower()
-						//println(rf.me, "has become follower with term", rf.currentTerm)
 					}
-					// server remains leader
+					// server remains being leader
 					if rf.state == LEADER {
 						// todo: apply command or modify nextIndex, matchIndex, etc
 					}
@@ -106,6 +103,7 @@ func (rf *Raft) startAppendEntries() {
 
 // The startElectionTicker go routine starts a new election if this peer hasn't received
 // heartsbeats recently.
+
 func (rf *Raft) appendEntriesTicker() {
 	for rf.killed() == false {
 

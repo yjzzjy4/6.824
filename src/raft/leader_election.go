@@ -9,6 +9,7 @@ import (
 // example RequestVote RPC arguments structure.
 // field names must start with capital letters!
 //
+
 type RequestVoteArgs struct {
 	// Your data here (2A, 2B).
 	Term         int
@@ -21,6 +22,7 @@ type RequestVoteArgs struct {
 // example RequestVote RPC reply structure.
 // field names must start with capital letters!
 //
+
 type RequestVoteReply struct {
 	// Your data here (2A).
 	Term        int
@@ -28,25 +30,24 @@ type RequestVoteReply struct {
 }
 
 //
-// example RequestVote RPC handler.
+// RequestVote RPC handler.
 //
+
 func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	// Your code here (2A, 2B).
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
 
-	// candidate Term < this currentTerm;
 	if args.Term < rf.currentTerm {
 		reply.Term = rf.currentTerm
 		reply.VoteGranted = false
 		return
 	}
 
-	// receive a higher Term, change this server to follower
+	// received a higher Term, change this server to follower
 	if args.Term > rf.currentTerm {
 		rf.currentTerm = args.Term
 		rf.toFollower()
-		//println(rf.me, "has become follower with term", rf.currentTerm)
 	}
 
 	reply.Term = rf.currentTerm
@@ -58,7 +59,6 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 			// grant vote and reset election timer;
 			rf.votedFor = &args.CandidateId
 			reply.VoteGranted = true
-			//println("In term ", reply.Term, ", ", rf.me, " has voted for: ", args.CandidateId)
 			rf.resetElectionTimer()
 		}
 	}
@@ -93,6 +93,7 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 // that the caller passes the address of the reply struct with &, not
 // the struct itself.
 //
+
 func (rf *Raft) sendRequestVote(server int, args *RequestVoteArgs, reply *RequestVoteReply) bool {
 	ok := rf.peers[server].Call("Raft.RequestVote", args, reply)
 	return ok
@@ -101,8 +102,8 @@ func (rf *Raft) sendRequestVote(server int, args *RequestVoteArgs, reply *Reques
 /**
  * candidate starts an election
  */
+
 func (rf *Raft) startElection() {
-	// send request vote RPC to other servers
 	for i := range rf.peers {
 		if i == rf.me {
 			continue
@@ -123,13 +124,12 @@ func (rf *Raft) startElection() {
 			if ok {
 				rf.mu.Lock()
 				defer rf.mu.Unlock()
-				// non-outdated reply
+				// valid reply (non-outdated)
 				if args.Term == rf.currentTerm {
 					// higher Term discovered, step down to follower
 					if reply.Term > rf.currentTerm {
 						rf.currentTerm = reply.Term
 						rf.toFollower()
-						//println(rf.me, "has become follower with term", rf.currentTerm)
 					}
 					// server are still voting
 					if rf.state == CANDIDATE {
@@ -139,9 +139,7 @@ func (rf *Raft) startElection() {
 							// server collect majority votes, wins the election
 							if rf.voteCount >= len(rf.peers)/2+1 {
 								rf.toLeader()
-								//println("In term ", reply.Term, ", ", rf.me, " has become the leader.")
 							}
-							return
 						}
 					}
 				}
@@ -152,6 +150,7 @@ func (rf *Raft) startElection() {
 
 // The startElectionTicker go routine starts a new election if this peer hasn't received
 // heartsbeats recently.
+
 func (rf *Raft) startElectionTicker() {
 	for rf.killed() == false {
 

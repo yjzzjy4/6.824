@@ -19,15 +19,12 @@ func (rf *Raft) toCandidate() {
 	rf.currentTerm++
 	rf.votedFor = &rf.me
 	rf.voteCount = 1
-	//println(rf.me, "has become candidate with term", rf.currentTerm)
 	rf.resetElectionTimer()
 	rf.startElection()
 }
 
 func (rf *Raft) toLeader() {
 	rf.state = LEADER
-	//rf.votedFor = nil
-	rf.voteCount = 0
 	rf.leaderId = rf.me
 
 	rf.nextIndex = make([]int, len(rf.peers))
@@ -37,5 +34,4 @@ func (rf *Raft) toLeader() {
 
 	rf.matchIndex = make([]int, len(rf.peers))
 	rf.matchIndex[rf.me] = len(rf.logs) - 1
-	//println(rf.me, "has become leader with term", rf.currentTerm)
 }
