@@ -37,63 +37,6 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		rf.toFollower()
 	}
 
-	// peer's logs don't match with leader's logs
-	if len(rf.logs)-1 < args.PrevLogIndex || rf.logs[args.PrevLogIndex].Term != args.PrevLogTerm {
-		reply.Term = rf.currentTerm
-		reply.Success = false
-		return
-	}
-
-	appendOffset, entryLength, logLength := 0, len(args.Entries), len(rf.logs)
-	// check if entry conflict exists
-	for i := args.PrevLogIndex + 1; i <= logLength; i++ {
-		entryIndex := i - args.PrevLogIndex - 1
-		if i == logLength {
-			// entries are longer than peer's logs, without conflict
-			if entryIndex < entryLength {
-				appendOffset = entryIndex
-				break
-			}
-			break
-		}
-		// peer's log are longer than entries, without conflict
-		if entryIndex == entryLength {
-			appendOffset = entryLength
-			break
-		}
-		// conflict occurs
-		if rf.logs[i].Term != args.Entries[entryIndex].Term {
-			// truncate server's logs
-			rf.logs = rf.logs[:i]
-			appendOffset = entryIndex
-			break
-		}
-	}
-
-	// append new entries
-	appendEntries := args.Entries[appendOffset:]
-	logLengthBeforeAppend := len(rf.logs)
-	if len(appendEntries) > 0 {
-		rf.logs = append(rf.logs, appendEntries...)
-		rf.commitIndex = len(rf.logs) - 1
-	}
-	for i, entry := range appendEntries {
-		rf.applyMsgCh <- ApplyMsg{
-			Command:      entry.Command,
-			CommandIndex: i + logLengthBeforeAppend,
-			CommandValid: true,
-		}
-	}
-
-	// set commitIndex
-	if args.LeaderCommit > rf.commitIndex {
-		if args.LeaderCommit < len(rf.logs)-1 {
-			rf.commitIndex = args.LeaderCommit
-		} else {
-			rf.commitIndex = len(rf.logs) - 1
-		}
-	}
-
 	rf.leaderId = args.LeaderId
 	reply.Term = rf.currentTerm
 	reply.Success = true
@@ -106,6 +49,36 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	if rf.state == FOLLOWER {
 		// reset election timer
 		rf.resetElectionTimer()
+	}
+
+	// peer's logs don't match with leader's logs
+	if len(rf.logs)-1 < args.PrevLogIndex || rf.logs[args.PrevLogIndex].Term != args.PrevLogTerm {
+		reply.Term = rf.currentTerm
+		reply.Success = false
+		return
+	}
+
+	// use args.Entries to update this peer's logs
+	for i, entry := range args.Entries {
+		logIndex := i + args.PrevLogIndex + 1
+		// conflict occurs, truncate peer's logs
+		if logIndex < len(rf.logs) && rf.logs[logIndex].Term != entry.Term {
+			rf.logs = rf.logs[:logIndex]
+		}
+		// append new entries (if any)
+		if logIndex >= len(rf.logs) {
+			rf.logs = append(rf.logs, args.Entries[i:]...)
+			break
+		}
+	}
+
+	// set commitIndex
+	if args.LeaderCommit > rf.commitIndex {
+		if args.LeaderCommit < len(rf.logs)-1 {
+			rf.commitIndex = args.LeaderCommit
+		} else {
+			rf.commitIndex = len(rf.logs) - 1
+		}
 	}
 }
 
@@ -153,29 +126,28 @@ func (rf *Raft) startAppendEntries() {
 					}
 					// server remains being leader
 					if rf.state == LEADER {
-						// update nextIndex and matchIndex for the peer (follower)
+						// update nextIndex and matchIndex for that peer (follower)
 						if reply.Success {
-							rf.matchIndex[peerIndex] = args.PrevLogIndex + len(args.Entries)
-							rf.nextIndex[peerIndex] = rf.matchIndex[peerIndex] + 1
+							matchIndex := args.PrevLogIndex + len(args.Entries)
+							nextIndex := matchIndex + 1
+							if rf.matchIndex[peerIndex] < matchIndex {
+								rf.matchIndex[peerIndex] = matchIndex
+							}
+							if rf.nextIndex[peerIndex] < nextIndex {
+								rf.nextIndex[peerIndex] = nextIndex
+							}
 							// check whether to update leader's commitIndex
 							offset := rf.commitIndex
 							replicatedIndexCount := make([]int, len(rf.logs)-offset)
 							// count for how many peers that has replicated entry whose index > leader's commitIndex
 							for i := range rf.peers {
-								if rf.matchIndex[i] > offset {
+								if i != rf.me && rf.matchIndex[i] > offset {
 									replicatedIndexCount[rf.matchIndex[i]-offset]++
 								}
 							}
 							for i := len(replicatedIndexCount) - 1; i > 0; i-- {
 								// a majority of peers has replicated an entry with larger index, update commitIndex
-								if replicatedIndexCount[i] > len(rf.peers)/2+1 && rf.logs[i+offset].Term == rf.currentTerm {
-									for j := rf.commitIndex + 1; j <= i+offset; j++ {
-										rf.applyMsgCh <- ApplyMsg{
-											Command:      rf.logs[j].Command,
-											CommandIndex: j,
-											CommandValid: true,
-										}
-									}
+								if replicatedIndexCount[i] > len(rf.peers)/2 && rf.logs[i+offset].Term == rf.currentTerm {
 									rf.commitIndex = i + offset
 									break
 								}
@@ -191,7 +163,7 @@ func (rf *Raft) startAppendEntries() {
 	}
 }
 
-// The startElectionTicker go routine starts a new election if this peer hasn't received
+// The appendEntriesTicker go routine starts a new election if this peer hasn't received
 // heartsbeats recently.
 
 func (rf *Raft) appendEntriesTicker() {
@@ -203,6 +175,29 @@ func (rf *Raft) appendEntriesTicker() {
 		rf.mu.Lock()
 		if rf.state == LEADER {
 			rf.startAppendEntries()
+		}
+		rf.mu.Unlock()
+	}
+}
+
+// The applyEntriesTicker go routine is for checking if there are
+// new entries to be applied for each peer.
+
+func (rf *Raft) applyEntriesTicker() {
+	for rf.killed() == false {
+
+		// pause execution, otherwise the loop would slow down the entire implementation,
+		// causing a fail to the tests.
+		time.Sleep(10 * time.Millisecond)
+
+		rf.mu.Lock()
+		if rf.commitIndex > rf.lastApplied && len(rf.logs) > rf.lastApplied {
+			rf.lastApplied++
+			rf.applyMsgCh <- ApplyMsg{
+				Command:      rf.logs[rf.lastApplied].Command,
+				CommandIndex: rf.lastApplied,
+				CommandValid: true,
+			}
 		}
 		rf.mu.Unlock()
 	}

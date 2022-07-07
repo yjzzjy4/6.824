@@ -265,5 +265,8 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	// start appendEntriesTicker goroutine to start append entries / send heartbeats
 	go rf.appendEntriesTicker()
 
+	// start applyEntriesTicker goroutine to apply entries to each peer's state machine
+	go rf.applyEntriesTicker()
+
 	return rf
 }

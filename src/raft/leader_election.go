@@ -136,8 +136,10 @@ func (rf *Raft) startElection() {
 						if reply.VoteGranted {
 							rf.voteCount++
 							// server collect majority votes, wins the election
-							if rf.voteCount >= len(rf.peers)/2+1 {
+							if rf.voteCount > len(rf.peers)/2 {
 								rf.toLeader()
+								// send heartbeats to other peers immediately!
+								rf.startAppendEntries()
 							}
 						}
 					}
