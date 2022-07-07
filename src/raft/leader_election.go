@@ -119,9 +119,8 @@ func (rf *Raft) startElection() {
 			}
 			rf.mu.Unlock()
 			reply := &RequestVoteReply{}
-			ok := rf.sendRequestVote(peerIndex, args, reply)
 
-			if ok {
+			if rf.sendRequestVote(peerIndex, args, reply) {
 				rf.mu.Lock()
 				defer rf.mu.Unlock()
 				// valid reply (non-outdated)

@@ -92,8 +92,9 @@ type Raft struct {
 	// other necessary states
 	state         State // raft state
 	voteCount     int
-	leaderId      int       // used by follower for redirecting client's request to leader
-	heartBeatTime time.Time // last heartbeat time
+	leaderId      int           // used by follower for redirecting client's request to leader
+	heartBeatTime time.Time     // last heartbeat time
+	applyMsgCh    chan ApplyMsg // to inform the service (or tester) whether there are newly committed entries in this peer
 }
 
 func (rf *Raft) resetElectionTimer() {
@@ -187,13 +188,19 @@ func (rf *Raft) Snapshot(index int, snapshot []byte) {
 //
 
 func (rf *Raft) Start(command interface{}) (int, int, bool) {
-	index := -1
-	term := -1
-	isLeader := true
-
 	// Your code here (2B).
+	rf.mu.Lock()
+	defer rf.mu.Unlock()
 
-	return index, term, isLeader
+	if rf.state != LEADER {
+		return -1, rf.currentTerm, false
+	}
+
+	// append entry to leader's logs, will be syncing during next heartbeat
+	newEntry := LogEntry{Command: command, Term: rf.currentTerm}
+	rf.logs = append(rf.logs, newEntry)
+
+	return len(rf.logs), rf.currentTerm, rf.state == LEADER
 }
 
 //
@@ -243,6 +250,9 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf.commitIndex = 0
 	rf.lastApplied = 0
 	rf.logs = append(rf.logs, LogEntry{})
+	rf.nextIndex = make([]int, len(rf.peers))
+	rf.matchIndex = make([]int, len(rf.peers))
+	rf.applyMsgCh = applyCh
 	rf.toFollower()
 	rf.resetElectionTimer()
 
