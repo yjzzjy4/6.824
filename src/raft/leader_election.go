@@ -159,10 +159,10 @@ func (rf *Raft) startElectionTicker() {
 		// be started and to randomize sleeping time using
 		// time.Sleep().
 
-		// randomized election timeout (200 - 350ms)
+		// randomized election timeout (200 - 400ms)
 		timeBeforeSleep := time.Now()
 		rand.Seed(time.Now().Unix() + int64(rf.me))
-		time.Sleep(time.Duration(rand.Intn(151)+200) * time.Millisecond)
+		time.Sleep(time.Duration(rand.Intn(201)+200) * time.Millisecond)
 
 		rf.mu.Lock()
 		// election timeout, start new election

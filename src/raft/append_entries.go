@@ -52,7 +52,7 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	}
 
 	// peer's logs don't match with leader's logs
-	if len(rf.logs)-1 < args.PrevLogIndex || rf.logs[args.PrevLogIndex].Term != args.PrevLogTerm {
+	if len(rf.logs) <= args.PrevLogIndex || rf.logs[args.PrevLogIndex].Term != args.PrevLogTerm {
 		reply.Term = rf.currentTerm
 		reply.Success = false
 		return
@@ -76,9 +76,9 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	if args.LeaderCommit > rf.commitIndex {
 		if args.LeaderCommit < len(rf.logs)-1 {
 			rf.commitIndex = args.LeaderCommit
-		} else {
-			rf.commitIndex = len(rf.logs) - 1
+			return
 		}
+		rf.commitIndex = len(rf.logs) - 1
 	}
 }
 
@@ -99,7 +99,7 @@ func (rf *Raft) startAppendEntries() {
 		go func(peerIndex int) {
 			rf.mu.Lock()
 			var entries []LogEntry
-			if len(rf.logs) >= rf.nextIndex[peerIndex] {
+			if len(rf.logs) > rf.nextIndex[peerIndex] {
 				entries = rf.logs[rf.nextIndex[peerIndex]:]
 			}
 			prevLogIndex := rf.nextIndex[peerIndex] - 1
@@ -130,25 +130,24 @@ func (rf *Raft) startAppendEntries() {
 						if reply.Success {
 							matchIndex := args.PrevLogIndex + len(args.Entries)
 							nextIndex := matchIndex + 1
-							if rf.matchIndex[peerIndex] < matchIndex {
-								rf.matchIndex[peerIndex] = matchIndex
-							}
-							if rf.nextIndex[peerIndex] < nextIndex {
-								rf.nextIndex[peerIndex] = nextIndex
-							}
-							// check whether to update leader's commitIndex
-							offset := rf.commitIndex
-							replicatedIndexCount := make([]int, len(rf.logs)-offset)
-							// count for how many peers that has replicated entry whose index > leader's commitIndex
-							for i := range rf.peers {
-								if i != rf.me && rf.matchIndex[i] > offset {
-									replicatedIndexCount[rf.matchIndex[i]-offset]++
+							rf.matchIndex[peerIndex] = matchIndex
+							rf.nextIndex[peerIndex] = nextIndex
+							// find an index n (if any), to update leader's commitIndex
+							for n := len(rf.logs) - 1; n > rf.commitIndex; n-- {
+								if rf.logs[n].Term != rf.currentTerm {
+									continue
 								}
-							}
-							for i := len(replicatedIndexCount) - 1; i > 0; i-- {
-								// a majority of peers has replicated an entry with larger index, update commitIndex
-								if replicatedIndexCount[i] > len(rf.peers)/2 && rf.logs[i+offset].Term == rf.currentTerm {
-									rf.commitIndex = i + offset
+								count := 0
+								for i := range rf.peers {
+									if i != rf.me && rf.matchIndex[i] >= n {
+										count++
+										if count > len(rf.peers)/2 {
+											break
+										}
+									}
+								}
+								if count > len(rf.peers)/2 {
+									rf.commitIndex = n
 									break
 								}
 							}
@@ -191,7 +190,7 @@ func (rf *Raft) applyEntriesTicker() {
 		time.Sleep(10 * time.Millisecond)
 
 		rf.mu.Lock()
-		if rf.commitIndex > rf.lastApplied && len(rf.logs) > rf.lastApplied {
+		for rf.commitIndex > rf.lastApplied && rf.lastApplied < len(rf.logs) {
 			rf.lastApplied++
 			rf.applyMsgCh <- ApplyMsg{
 				Command:      rf.logs[rf.lastApplied].Command,

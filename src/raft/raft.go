@@ -197,10 +197,9 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 	}
 
 	// append entry to leader's logs, will be syncing during next heartbeat
-	newEntry := LogEntry{Command: command, Term: rf.currentTerm}
-	rf.logs = append(rf.logs, newEntry)
+	rf.logs = append(rf.logs, LogEntry{Command: command, Term: rf.currentTerm})
 
-	return len(rf.logs), rf.currentTerm, rf.state == LEADER
+	return len(rf.logs) - 1, rf.currentTerm, true
 }
 
 //
