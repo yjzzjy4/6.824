@@ -14,8 +14,10 @@ type AppendEntriesArgs struct {
 }
 
 type AppendEntriesReply struct {
-	Term    int
-	Success bool
+	Term          int
+	Success       bool
+	ConflictIndex int
+	ConflictTerm  int
 }
 
 //
@@ -25,6 +27,7 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
 
+	// #1
 	if args.Term < rf.currentTerm {
 		reply.Term = rf.currentTerm
 		reply.Success = false
@@ -37,48 +40,61 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		rf.toFollower()
 	}
 
-	rf.leaderId = args.LeaderId
-	reply.Term = rf.currentTerm
-	reply.Success = true
-
 	// candidate -> follower
 	if rf.state == CANDIDATE {
 		rf.toFollower()
 	}
 
-	if rf.state == FOLLOWER {
-		// reset election timer
-		rf.resetElectionTimer()
-	}
+	// reset election timer
+	rf.resetElectionTimer()
 
-	// peer's logs don't match with leader's logs
-	if len(rf.logs) <= args.PrevLogIndex || rf.logs[args.PrevLogIndex].Term != args.PrevLogTerm {
-		reply.Term = rf.currentTerm
-		reply.Success = false
+	rf.leaderId = args.LeaderId
+	reply.Term = rf.currentTerm
+	reply.ConflictIndex = -1
+	reply.ConflictTerm = -1
+	reply.Success = false
+
+	// #2: follower does not have prevLogIndex in its log
+	if len(rf.logs) <= args.PrevLogIndex {
+		reply.ConflictIndex = len(rf.logs)
 		return
 	}
+
+	// #2: follower does have prevLogIndex in its log, but the term does not match
+	if rf.logs[args.PrevLogIndex].Term != args.PrevLogTerm {
+		reply.ConflictTerm = rf.logs[args.PrevLogIndex].Term
+		for i := args.PrevLogIndex - 1; i >= 0; i-- {
+			if rf.logs[i].Term != reply.ConflictTerm {
+				reply.ConflictIndex = i + 1
+				break
+			}
+		}
+		return
+	}
+
+	reply.Success = true
 
 	// use args.Entries to update this peer's logs
 	for i, entry := range args.Entries {
 		logIndex := i + args.PrevLogIndex + 1
-		// conflict occurs, truncate peer's logs
+		// #3, conflict occurs, truncate peer's logs
 		if logIndex < len(rf.logs) && rf.logs[logIndex].Term != entry.Term {
 			rf.logs = rf.logs[:logIndex]
 		}
-		// append new entries (if any)
+		// #4, append new entries (if any)
 		if logIndex >= len(rf.logs) {
 			rf.logs = append(rf.logs, args.Entries[i:]...)
 			break
 		}
 	}
 
-	// set commitIndex
+	// #5, set commitIndex
 	if args.LeaderCommit > rf.commitIndex {
 		if args.LeaderCommit < len(rf.logs)-1 {
 			rf.commitIndex = args.LeaderCommit
-			return
+		} else {
+			rf.commitIndex = len(rf.logs) - 1
 		}
-		rf.commitIndex = len(rf.logs) - 1
 	}
 }
 
@@ -97,10 +113,12 @@ func (rf *Raft) startAppendEntries() {
 		}
 		// send append entries RPC in parallel
 		go func(peerIndex int) {
-			rf.mu.Lock()
 			var entries []LogEntry
+			rf.mu.Lock()
 			if len(rf.logs) > rf.nextIndex[peerIndex] {
-				entries = rf.logs[rf.nextIndex[peerIndex]:]
+				//entries = make([]LogEntry, len(rf.logs)-rf.nextIndex[peerIndex])
+				//copy(entries, rf.logs[rf.nextIndex[peerIndex]:])
+				entries = append(entries, rf.logs[rf.nextIndex[peerIndex]:]...)
 			}
 			prevLogIndex := rf.nextIndex[peerIndex] - 1
 			args := &AppendEntriesArgs{
@@ -113,8 +131,9 @@ func (rf *Raft) startAppendEntries() {
 			}
 			rf.mu.Unlock()
 			reply := &AppendEntriesReply{}
+			ok := rf.sendAppendEntries(peerIndex, args, reply)
 
-			if rf.sendAppendEntries(peerIndex, args, reply) {
+			if ok {
 				rf.mu.Lock()
 				defer rf.mu.Unlock()
 				// valid reply (non-outdated)
@@ -129,31 +148,41 @@ func (rf *Raft) startAppendEntries() {
 						// update nextIndex and matchIndex for that peer (follower)
 						if reply.Success {
 							matchIndex := args.PrevLogIndex + len(args.Entries)
-							nextIndex := matchIndex + 1
 							rf.matchIndex[peerIndex] = matchIndex
-							rf.nextIndex[peerIndex] = nextIndex
+							rf.nextIndex[peerIndex] = matchIndex + 1
 							// find an index n (if any), to update leader's commitIndex
 							for n := len(rf.logs) - 1; n > rf.commitIndex; n-- {
 								if rf.logs[n].Term != rf.currentTerm {
 									continue
 								}
-								count := 0
+								// the entry has replicated to leader itself
+								count := 1
 								for i := range rf.peers {
 									if i != rf.me && rf.matchIndex[i] >= n {
 										count++
 										if count > len(rf.peers)/2 {
-											break
+											rf.commitIndex = n
+											return
 										}
 									}
 								}
-								if count > len(rf.peers)/2 {
-									rf.commitIndex = n
-									break
-								}
 							}
 						} else {
-							// decrement nextIndex and retry (on next heartbeat tick)
-							rf.nextIndex[peerIndex]--
+							// the accelerated log backtracking optimization
+							if reply.ConflictTerm == -1 {
+								rf.nextIndex[peerIndex] = reply.ConflictIndex
+								return
+							}
+							for i := len(rf.logs) - 1; i > 0; i-- {
+								if rf.logs[i].Term < reply.ConflictTerm {
+									break
+								}
+								if rf.logs[i].Term == reply.ConflictTerm {
+									rf.nextIndex[peerIndex] = i + 1
+									return
+								}
+							}
+							rf.nextIndex[peerIndex] = reply.ConflictIndex
 						}
 					}
 				}
@@ -168,8 +197,8 @@ func (rf *Raft) startAppendEntries() {
 func (rf *Raft) appendEntriesTicker() {
 	for rf.killed() == false {
 
-		// heartbeat timeout (100ms)
-		time.Sleep(100 * time.Millisecond)
+		// heartbeat timeout (120ms)
+		time.Sleep(120 * time.Millisecond)
 
 		rf.mu.Lock()
 		if rf.state == LEADER {
@@ -190,13 +219,17 @@ func (rf *Raft) applyEntriesTicker() {
 		time.Sleep(10 * time.Millisecond)
 
 		rf.mu.Lock()
-		for rf.commitIndex > rf.lastApplied && rf.lastApplied < len(rf.logs) {
+		for rf.commitIndex > rf.lastApplied {
 			rf.lastApplied++
-			rf.applyMsgCh <- ApplyMsg{
+			msg := ApplyMsg{
 				Command:      rf.logs[rf.lastApplied].Command,
 				CommandIndex: rf.lastApplied,
 				CommandValid: true,
 			}
+			rf.mu.Unlock()
+			rf.applyMsgCh <- msg
+			rf.mu.Lock()
+			//fmt.Println(rf.me, "has committed: ", rf.commitIndex, "applied: ", rf.lastApplied)
 		}
 		rf.mu.Unlock()
 	}

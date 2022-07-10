@@ -38,6 +38,7 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
 
+	// #1
 	if args.Term < rf.currentTerm {
 		reply.Term = rf.currentTerm
 		reply.VoteGranted = false
@@ -53,6 +54,7 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	reply.Term = rf.currentTerm
 	reply.VoteGranted = false
 
+	// #2
 	if rf.votedFor == nil || *rf.votedFor == args.CandidateId {
 		// compare whose log is up-to-date;
 		if args.LastLogTerm > rf.logs[len(rf.logs)-1].Term || args.LastLogTerm == rf.logs[len(rf.logs)-1].Term && args.LastLogIndex >= len(rf.logs)-1 {
@@ -119,8 +121,9 @@ func (rf *Raft) startElection() {
 			}
 			rf.mu.Unlock()
 			reply := &RequestVoteReply{}
+			ok := rf.sendRequestVote(peerIndex, args, reply)
 
-			if rf.sendRequestVote(peerIndex, args, reply) {
+			if ok {
 				rf.mu.Lock()
 				defer rf.mu.Unlock()
 				// valid reply (non-outdated)

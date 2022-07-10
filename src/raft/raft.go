@@ -193,7 +193,7 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 	defer rf.mu.Unlock()
 
 	if rf.state != LEADER {
-		return -1, rf.currentTerm, false
+		return -1, -1, false
 	}
 
 	// append entry to leader's logs, will be syncing during next heartbeat

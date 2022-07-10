@@ -27,11 +27,9 @@ func (rf *Raft) toLeader() {
 	rf.state = LEADER
 	rf.leaderId = rf.me
 
+	rf.matchIndex = make([]int, len(rf.peers))
 	rf.nextIndex = make([]int, len(rf.peers))
 	for i := range rf.peers {
 		rf.nextIndex[i] = len(rf.logs)
 	}
-
-	rf.matchIndex = make([]int, len(rf.peers))
-	rf.matchIndex[rf.me] = len(rf.logs) - 1
 }
