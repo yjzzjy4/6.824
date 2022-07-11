@@ -1,6 +1,7 @@
 package raft
 
 import (
+	"fmt"
 	"time"
 )
 
@@ -56,7 +57,7 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 
 	// #2: follower does not have prevLogIndex in its log
 	if len(rf.logs) <= args.PrevLogIndex {
-		reply.ConflictIndex = len(rf.logs) - 1
+		reply.ConflictIndex = len(rf.logs)
 		return
 	}
 
@@ -119,6 +120,9 @@ func (rf *Raft) startAppendEntries() {
 				entries = append(entries, rf.logs[rf.nextIndex[peerIndex]:]...)
 			}
 			prevLogIndex := rf.nextIndex[peerIndex] - 1
+			if prevLogIndex == len(rf.logs) {
+				prevLogIndex = len(rf.logs) - 1
+			}
 			args := &AppendEntriesArgs{
 				Term:         rf.currentTerm,
 				LeaderId:     rf.me,
@@ -148,6 +152,7 @@ func (rf *Raft) startAppendEntries() {
 							matchIndex := args.PrevLogIndex + len(args.Entries)
 							rf.matchIndex[peerIndex] = matchIndex
 							rf.nextIndex[peerIndex] = matchIndex + 1
+							fmt.Printf("matchIndex: %v, nextIndex: %v, log len: %v\n", matchIndex, matchIndex+1, len(rf.logs))
 							// find an index n (if any), to update leader's commitIndex
 							for n := len(rf.logs) - 1; n > rf.commitIndex; n-- {
 								if rf.logs[n].Term != rf.currentTerm {
@@ -214,7 +219,7 @@ func (rf *Raft) applyEntriesTicker() {
 
 		// pause execution, otherwise the loop would slow down the entire implementation,
 		// causing a fail to the tests.
-		time.Sleep(10 * time.Millisecond)
+		//time.Sleep(10 * time.Millisecond)
 
 		rf.mu.Lock()
 		for rf.commitIndex > rf.lastApplied && rf.lastApplied < len(rf.logs)-1 {
