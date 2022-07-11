@@ -1,7 +1,7 @@
 package raft
 
 //
-// support for Raft tester.
+// support for Raft test_results.
 //
 // we will use the original config.go to test your code for grading.
 // so, while you can modify this code to help you debug, please

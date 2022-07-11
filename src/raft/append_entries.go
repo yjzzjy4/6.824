@@ -56,7 +56,7 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 
 	// #2: follower does not have prevLogIndex in its log
 	if len(rf.logs) <= args.PrevLogIndex {
-		reply.ConflictIndex = len(rf.logs)
+		reply.ConflictIndex = len(rf.logs) - 1
 		return
 	}
 
@@ -116,8 +116,6 @@ func (rf *Raft) startAppendEntries() {
 			var entries []LogEntry
 			rf.mu.Lock()
 			if len(rf.logs) > rf.nextIndex[peerIndex] {
-				//entries = make([]LogEntry, len(rf.logs)-rf.nextIndex[peerIndex])
-				//copy(entries, rf.logs[rf.nextIndex[peerIndex]:])
 				entries = append(entries, rf.logs[rf.nextIndex[peerIndex]:]...)
 			}
 			prevLogIndex := rf.nextIndex[peerIndex] - 1
@@ -219,7 +217,7 @@ func (rf *Raft) applyEntriesTicker() {
 		time.Sleep(10 * time.Millisecond)
 
 		rf.mu.Lock()
-		for rf.commitIndex > rf.lastApplied {
+		for rf.commitIndex > rf.lastApplied && rf.lastApplied < len(rf.logs)-1 {
 			rf.lastApplied++
 			msg := ApplyMsg{
 				Command:      rf.logs[rf.lastApplied].Command,

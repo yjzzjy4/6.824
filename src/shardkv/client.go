@@ -43,7 +43,7 @@ type Clerk struct {
 }
 
 //
-// the tester calls MakeClerk.
+// the test_results calls MakeClerk.
 //
 // ctrlers[] is needed to call shardctrler.MakeClerk().
 //

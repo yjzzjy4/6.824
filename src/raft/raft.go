@@ -2,7 +2,7 @@ package raft
 
 //
 // this is an outline of the API that raft must expose to
-// the service (or tester). see comments below for
+// the service (or test_results). see comments below for
 // each of these functions for more details.
 //
 // rf = Make(...)
@@ -13,7 +13,7 @@ package raft
 //   ask a Raft for its current term, and whether it thinks it is leader
 // ApplyMsg
 //   each time a new entry is committed to the log, each Raft peer
-//   should send an ApplyMsg to the service (or tester)
+//   should send an ApplyMsg to the service (or test_results)
 //   in the same server.
 //
 
@@ -30,7 +30,7 @@ import (
 //
 // as each Raft peer becomes aware that successive log entries are
 // committed, the peer should send an ApplyMsg to the service (or
-// tester) on the same server, via the applyCh passed to Make(). set
+// test_results) on the same server, via the applyCh passed to Make(). set
 // CommandValid to true to indicate that the ApplyMsg contains a newly
 // committed log entry.
 //
@@ -94,7 +94,7 @@ type Raft struct {
 	voteCount     int
 	leaderId      int           // used by follower for redirecting client's request to leader
 	heartBeatTime time.Time     // last heartbeat time
-	applyMsgCh    chan ApplyMsg // to inform the service (or tester) whether there are newly committed entries in this peer
+	applyMsgCh    chan ApplyMsg // to inform the service (or test_results) whether there are newly committed entries in this peer
 }
 
 func (rf *Raft) resetElectionTimer() {
@@ -203,7 +203,7 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 }
 
 //
-// the tester doesn't halt goroutines created by Raft after each test,
+// the test_results doesn't halt goroutines created by Raft after each test,
 // but it does call the Kill() method. your code can use killed() to
 // check whether Kill() has been called. the use of atomic avoids the
 // need for a lock.
@@ -225,13 +225,13 @@ func (rf *Raft) killed() bool {
 }
 
 //
-// the service or tester wants to create a Raft server. the ports
+// the service or test_results wants to create a Raft server. the ports
 // of all the Raft servers (including this one) are in peers[]. this
 // server's port is peers[me]. all the servers' peers[] arrays
 // have the same order. persister is a place for this server to
 // save its persistent state, and also initially holds the most
 // recent saved state, if any. applyCh is a channel on which the
-// tester or service expects Raft to send ApplyMsg messages.
+// test_results or service expects Raft to send ApplyMsg messages.
 // Make() must return quickly, so it should start goroutines
 // for any long-running work.
 //
