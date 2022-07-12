@@ -1,7 +1,7 @@
 package raft
 
 //
-// support for Raft test_results.
+// support for Raft tester.
 //
 // we will use the original config.go to test your code for grading.
 // so, while you can modify this code to help you debug, please
@@ -503,7 +503,6 @@ func (cfg *config) nCommitted(index int) (int, interface{}) {
 
 		cfg.mu.Lock()
 		cmd1, ok := cfg.logs[i][index]
-		//fmt.Println(i, ok)
 		cfg.mu.Unlock()
 
 		if ok {
@@ -578,20 +577,18 @@ func (cfg *config) one(cmd interface{}, expectedServers int, retry bool) int {
 			if rf != nil {
 				index1, _, ok := rf.Start(cmd)
 				if ok {
-					//fmt.Println(rf.me, "claims to be the leader")
 					index = index1
 					break
 				}
 			}
 		}
-		//fmt.Println("expected log index: ", index)
+
 		if index != -1 {
 			// somebody claimed to be the leader and to have
 			// submitted our command; wait a while for agreement.
 			t1 := time.Now()
 			for time.Since(t1).Seconds() < 2 {
 				nd, cmd1 := cfg.nCommitted(index)
-				//fmt.Println("servers: ", nd, "expectedServers: ", expectedServers, cmd == cmd1)
 				if nd > 0 && nd >= expectedServers {
 					// committed
 					if cmd1 == cmd {
@@ -602,7 +599,6 @@ func (cfg *config) one(cmd interface{}, expectedServers int, retry bool) int {
 				time.Sleep(20 * time.Millisecond)
 			}
 			if retry == false {
-				//fmt.Println("Failed in first place")
 				cfg.t.Fatalf("one(%v) failed to reach agreement", cmd)
 			}
 		} else {
@@ -610,7 +606,6 @@ func (cfg *config) one(cmd interface{}, expectedServers int, retry bool) int {
 		}
 	}
 	if cfg.checkFinished() == false {
-		//fmt.Println("Failed in second place")
 		cfg.t.Fatalf("one(%v) failed to reach agreement", cmd)
 	}
 	return -1

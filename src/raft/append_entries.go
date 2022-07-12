@@ -1,7 +1,6 @@
 package raft
 
 import (
-	"fmt"
 	"time"
 )
 
@@ -77,14 +76,16 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 
 	// use args.Entries to update this peer's logs
 	for i, entry := range args.Entries {
-		logIndex := i + args.PrevLogIndex + 1
+		entryIndex := i + args.PrevLogIndex + 1
 		// #3, conflict occurs, truncate peer's logs
-		if logIndex < len(rf.logs) && rf.logs[logIndex].Term != entry.Term {
-			rf.logs = rf.logs[:logIndex]
+		if entryIndex < len(rf.logs) && rf.logs[entryIndex].Term != entry.Term {
+			rf.logs = rf.logs[:entryIndex]
+			rf.persist()
 		}
 		// #4, append new entries (if any)
-		if logIndex >= len(rf.logs) {
+		if entryIndex >= len(rf.logs) {
 			rf.logs = append(rf.logs, args.Entries[i:]...)
+			rf.persist()
 			break
 		}
 	}
@@ -96,6 +97,7 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		} else {
 			rf.commitIndex = len(rf.logs) - 1
 		}
+		rf.apply()
 	}
 }
 
@@ -119,10 +121,11 @@ func (rf *Raft) startAppendEntries() {
 			if len(rf.logs) > rf.nextIndex[peerIndex] {
 				entries = append(entries, rf.logs[rf.nextIndex[peerIndex]:]...)
 			}
-			prevLogIndex := rf.nextIndex[peerIndex] - 1
-			if prevLogIndex == len(rf.logs) {
-				prevLogIndex = len(rf.logs) - 1
+			nextIndex := rf.nextIndex[peerIndex]
+			if nextIndex > len(rf.logs) {
+				nextIndex = len(rf.logs)
 			}
+			prevLogIndex := nextIndex - 1
 			args := &AppendEntriesArgs{
 				Term:         rf.currentTerm,
 				LeaderId:     rf.me,
@@ -133,9 +136,8 @@ func (rf *Raft) startAppendEntries() {
 			}
 			rf.mu.Unlock()
 			reply := &AppendEntriesReply{}
-			ok := rf.sendAppendEntries(peerIndex, args, reply)
 
-			if ok {
+			if rf.sendAppendEntries(peerIndex, args, reply) {
 				rf.mu.Lock()
 				defer rf.mu.Unlock()
 				// valid reply (non-outdated)
@@ -152,7 +154,6 @@ func (rf *Raft) startAppendEntries() {
 							matchIndex := args.PrevLogIndex + len(args.Entries)
 							rf.matchIndex[peerIndex] = matchIndex
 							rf.nextIndex[peerIndex] = matchIndex + 1
-							fmt.Printf("matchIndex: %v, nextIndex: %v, log len: %v\n", matchIndex, matchIndex+1, len(rf.logs))
 							// find an index n (if any), to update leader's commitIndex
 							for n := len(rf.logs) - 1; n > rf.commitIndex; n-- {
 								if rf.logs[n].Term != rf.currentTerm {
@@ -165,6 +166,7 @@ func (rf *Raft) startAppendEntries() {
 										count++
 										if count > len(rf.peers)/2 {
 											rf.commitIndex = n
+											rf.apply()
 											return
 										}
 									}
@@ -198,7 +200,7 @@ func (rf *Raft) startAppendEntries() {
 // heartsbeats recently.
 
 func (rf *Raft) appendEntriesTicker() {
-	for rf.killed() == false {
+	for !rf.killed() {
 
 		// heartbeat timeout (120ms)
 		time.Sleep(120 * time.Millisecond)
@@ -211,29 +213,28 @@ func (rf *Raft) appendEntriesTicker() {
 	}
 }
 
-// The applyEntriesTicker go routine is for checking if there are
-// new entries to be applied for each peer.
+func (rf *Raft) apply() {
+	rf.applyCond.Broadcast()
+}
 
-func (rf *Raft) applyEntriesTicker() {
-	for rf.killed() == false {
+func (rf *Raft) applier() {
+	rf.mu.Lock()
+	defer rf.mu.Unlock()
 
-		// pause execution, otherwise the loop would slow down the entire implementation,
-		// causing a fail to the tests.
-		//time.Sleep(10 * time.Millisecond)
-
-		rf.mu.Lock()
-		for rf.commitIndex > rf.lastApplied && rf.lastApplied < len(rf.logs)-1 {
+	for !rf.killed() {
+		// all server rule 1
+		if rf.commitIndex > rf.lastApplied && len(rf.logs)-1 > rf.lastApplied {
 			rf.lastApplied++
-			msg := ApplyMsg{
+			applyMsg := ApplyMsg{
+				CommandValid: true,
 				Command:      rf.logs[rf.lastApplied].Command,
 				CommandIndex: rf.lastApplied,
-				CommandValid: true,
 			}
 			rf.mu.Unlock()
-			rf.applyMsgCh <- msg
+			rf.applyMsgCh <- applyMsg
 			rf.mu.Lock()
-			//fmt.Println(rf.me, "has committed: ", rf.commitIndex, "applied: ", rf.lastApplied)
+		} else {
+			rf.applyCond.Wait()
 		}
-		rf.mu.Unlock()
 	}
 }

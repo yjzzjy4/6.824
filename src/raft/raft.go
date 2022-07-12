@@ -18,6 +18,8 @@ package raft
 //
 
 import (
+	"6.824/labgob"
+	"bytes"
 	//	"bytes"
 	"sync"
 	"sync/atomic"
@@ -78,7 +80,7 @@ type Raft struct {
 
 	// persisted states on all servers
 	currentTerm int        // latest Term server has seen
-	votedFor    *int       // CandidateId that received vote in current
+	votedFor    int        // CandidateId that received vote in current
 	logs        []LogEntry // log entries
 
 	// volatile states on all servers
@@ -95,6 +97,7 @@ type Raft struct {
 	leaderId      int           // used by follower for redirecting client's request to leader
 	heartBeatTime time.Time     // last heartbeat time
 	applyMsgCh    chan ApplyMsg // to inform the service (or test_results) whether there are newly committed entries in this peer
+	applyCond     *sync.Cond
 }
 
 func (rf *Raft) resetElectionTimer() {
@@ -120,12 +123,13 @@ func (rf *Raft) GetState() (int, bool) {
 func (rf *Raft) persist() {
 	// Your code here (2C).
 	// Example:
-	// w := new(bytes.Buffer)
-	// e := labgob.NewEncoder(w)
-	// e.Encode(rf.xxx)
-	// e.Encode(rf.yyy)
-	// data := w.Bytes()
-	// rf.persister.SaveRaftState(data)
+	w := new(bytes.Buffer)
+	e := labgob.NewEncoder(w)
+	e.Encode(rf.currentTerm)
+	e.Encode(rf.votedFor)
+	e.Encode(rf.logs)
+	data := w.Bytes()
+	rf.persister.SaveRaftState(data)
 }
 
 //
@@ -137,17 +141,20 @@ func (rf *Raft) readPersist(data []byte) {
 	}
 	// Your code here (2C).
 	// Example:
-	// r := bytes.NewBuffer(data)
-	// d := labgob.NewDecoder(r)
-	// var xxx
-	// var yyy
-	// if d.Decode(&xxx) != nil ||
-	//    d.Decode(&yyy) != nil {
-	//   error...
-	// } else {
-	//   rf.xxx = xxx
-	//   rf.yyy = yyy
-	// }
+	r := bytes.NewBuffer(data)
+	d := labgob.NewDecoder(r)
+	var currentTerm int
+	var votedFor int
+	var logs []LogEntry
+	if d.Decode(&currentTerm) != nil ||
+		d.Decode(&votedFor) != nil ||
+		d.Decode(&logs) != nil {
+		// 233
+	} else {
+		rf.currentTerm = currentTerm
+		rf.votedFor = votedFor
+		rf.logs = logs
+	}
 }
 
 //
@@ -193,11 +200,13 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 	defer rf.mu.Unlock()
 
 	if rf.state != LEADER {
-		return -1, -1, false
+		return -1, rf.currentTerm, false
 	}
 
 	// append entry to leader's logs, will be syncing during next heartbeat
 	rf.logs = append(rf.logs, LogEntry{Command: command, Term: rf.currentTerm})
+
+	rf.persist()
 
 	return len(rf.logs) - 1, rf.currentTerm, true
 }
@@ -248,10 +257,11 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf.currentTerm = 0
 	rf.commitIndex = 0
 	rf.lastApplied = 0
-	rf.logs = append(rf.logs, LogEntry{})
+	rf.logs = append(rf.logs, LogEntry{0, 0})
 	rf.nextIndex = make([]int, len(rf.peers))
 	rf.matchIndex = make([]int, len(rf.peers))
 	rf.applyMsgCh = applyCh
+	rf.applyCond = sync.NewCond(&rf.mu)
 	rf.toFollower()
 	rf.resetElectionTimer()
 
@@ -265,7 +275,7 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	go rf.appendEntriesTicker()
 
 	// start applyEntriesTicker goroutine to apply entries to each peer's state machine
-	go rf.applyEntriesTicker()
+	go rf.applier()
 
 	return rf
 }

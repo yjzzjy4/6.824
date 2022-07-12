@@ -1,4 +1,4 @@
-#!/bin/zsh
+#!/bin/bash
 #
 # Script for running `go test` a bunch of times, in parallel, storing the test
 # output as you go, and showing a nice status output telling you how you're
@@ -14,7 +14,7 @@
 #
 # First, it compiles your Go program (using go test -c) to ensure that all the
 # tests are run on the same codebase, and to speed up the testing. Then, it
-# runs the test_results some number of times. It will run some number of testers in
+# runs the tester some number of times. It will run some number of testers in
 # parallel, and when that number of running testers has been reached, it will
 # wait for the oldest one it spawned to finish before spawning another. The
 # output from each test i is stored in test-$i.log and test-$i.err (STDOUT and
@@ -22,11 +22,11 @@
 #
 # The options you can specify on the command line are:
 #
-#   1) how many times to run the test_results (defaults to 100)
+#   1) how many times to run the tester (defaults to 100)
 #   2) how many testers to run in parallel (defaults to the number of CPUs)
 #   3) which subset of the tests to run (default to all tests)
 #
-# 3) is simply a regex that is passed to the test_results under -test.run; any tests
+# 3) is simply a regex that is passed to the tester under -test.run; any tests
 # matching the regex will be run.
 #
 # The script is smart enough to clean up after itself if you kill it
@@ -43,7 +43,7 @@ if [ $# -eq 1 ] && [ "$1" = "--help" ]; then
 fi
 
 # If the tests don't even build, don't bother. Also, this gives us a static
-# test_results binary for higher performance and higher reproducability.
+# tester binary for higher performance and higher reproducability.
 if ! go test -c -o tester; then
 	echo -e "\e[1;31mERROR: Build failed\e[0m"
 	exit 1
@@ -55,7 +55,7 @@ if [ $# -gt 0 ]; then
 	runs="$1"
 fi
 
-# Default to one test_results per CPU unless otherwise specified
+# Default to one tester per CPU unless otherwise specified
 parallelism=$(grep -c processor /proc/cpuinfo)
 if [ $# -gt 1 ]; then
 	parallelism="$2"
@@ -68,13 +68,11 @@ if [ $# -gt 2 ]; then
 fi
 
 # Figure out where we left off
-#logs=$(find ./test_results -maxdepth 1 -name 'test-*.log' -type f -printf '.' | wc -c)
-#logs=$(find ./test_results -maxdepth 1 -name 'test.log' -type f -printf '.' | wc -c)
-#success=$(grep -E '^PASS$' test-*.log | wc -l)
-#success=$(grep -E '^PASS$' ./test_results/test.log | wc -l)
-#((failed = logs - success))
+logs=$(find ./test_results -maxdepth 1 -name 'test-*.log' -type f -printf '.' | wc -c)
+success=$(grep -E '^PASS$' test_results/test-*.log | wc -l)
+((failed = logs - success))
 
-# Finish checks the exit status of the test_results with the given PID, updates the
+# Finish checks the exit status of the tester with the given PID, updates the
 # success/failed counters appropriately, and prints a pretty message.
 finish() {
 	if ! wait "$1"; then
@@ -100,7 +98,7 @@ finish() {
 		"$failed"
 }
 
-waits=() # which test_results PIDs are we waiting on?
+waits=() # which tester PIDs are we waiting on?
 is=()    # and which iteration does each one correspond to?
 
 # Cleanup is called when the process is killed.
@@ -109,8 +107,7 @@ cleanup() {
 	for pid in "${waits[@]}"; do
 		kill "$pid"
 		wait "$pid"
-#		rm -rf "test_results/test-${is[0]}.err" "test_results/test-${is[0]}.log"
-		rm -rf "test_results/test.err" "test_results/test.log"
+		rm -rf "test-${is[0]}.err" "test-${is[0]}.log"
 		is=("${is[@]:1}")
 	done
 	exit 0
@@ -120,38 +117,28 @@ trap cleanup SIGHUP SIGINT SIGTERM
 # Run remaining iterations (we may already have run some)
 for i in $(seq "$((success+failed+1))" "$runs"); do
 	# If we have already spawned the max # of testers, wait for one to
-	# finish. We'll wait for the oldest one because it's easy.
+	# finish. We'll wait for the oldest one beause it's easy.
 	if [[ ${#waits[@]} -eq "$parallelism" ]]; then
 		finish "${waits[0]}"
 		waits=("${waits[@]:1}") # this funky syntax removes the first
 		is=("${is[@]:1}")       # element from the array
 	fi
 
-	# Store this test_results's iteration index
+	# Store this tester's iteration index
 	# It's important that this happens before appending to waits(),
 	# otherwise we could get an out-of-bounds in cleanup()
 	is=("${is[@]}" "$i")
 
-	# Run the test_results, passing -test.run if necessary
+	# Run the tester, passing -test.run if necessary
 	if [[ -z "$test" ]]; then
-#		./tester -test.v 2> "test_results/test-${i}.err" > "test_results/test-${i}.log" &
-    if [[ $i -eq 1 ]]; then
-      ./tester -test.v 2> "test_results/test.err" > "test_results/test.log" &
-    else
-		  ./tester -test.v 2>> "test_results/test.err" >> "test_results/test.log" &
-		fi
+		./tester -test.v 2> "test_results/test-${i}.err" > "test_results/test-${i}.log" &
 		pid=$!
 	else
-#		./tester -test.run "$test" -test.v 2> "test_results/test-${i}.err" > "test_results/test-${i}.log" &
-    if [[ $i -eq 1 ]]; then
-		  ./tester -test.run "$test" -test.v 2> "test_results/test.err" > "test_results/test.log" &
-		else
-		  ./tester -test.run "$test" -test.v 2>> "test_results/test.err" >> "test_results/test.log" &
-		fi
+		./tester -test.run "$test" -test.v 2> "test_results/test-${i}.err" > "test_results/test-${i}.log" &
 		pid=$!
 	fi
 
-	# Remember the test_results's PID so we can wait on it later
+	# Remember the tester's PID so we can wait on it later
 	waits=("${waits[@]}" "$pid")
 done
 

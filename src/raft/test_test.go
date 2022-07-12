@@ -15,7 +15,7 @@ import "math/rand"
 import "sync/atomic"
 import "sync"
 
-// The test_results generously allows solutions to complete elections in one second
+// The tester generously allows solutions to complete elections in one second
 // (much more than the paper's range of timeouts).
 const RaftElectionTimeout = 1000 * time.Millisecond
 
@@ -285,7 +285,6 @@ func TestFailAgree2B(t *testing.T) {
 
 	// disconnect one follower from the network.
 	leader := cfg.checkOneLeader()
-	//fmt.Println("Leader index: ", leader, "disconnected server index: ", (leader+1)%servers)
 	cfg.disconnect((leader + 1) % servers)
 
 	// the leader and remaining follower should be

@@ -55,13 +55,14 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	reply.VoteGranted = false
 
 	// #2
-	if rf.votedFor == nil || *rf.votedFor == args.CandidateId {
+	if rf.votedFor == -1 || rf.votedFor == args.CandidateId {
 		// compare whose log is up-to-date;
 		if args.LastLogTerm > rf.logs[len(rf.logs)-1].Term || args.LastLogTerm == rf.logs[len(rf.logs)-1].Term && args.LastLogIndex >= len(rf.logs)-1 {
 			// grant vote and reset election timer;
-			rf.votedFor = &args.CandidateId
+			rf.votedFor = args.CandidateId
 			reply.VoteGranted = true
 			rf.resetElectionTimer()
+			rf.persist()
 		}
 	}
 }
@@ -121,9 +122,8 @@ func (rf *Raft) startElection() {
 			}
 			rf.mu.Unlock()
 			reply := &RequestVoteReply{}
-			ok := rf.sendRequestVote(peerIndex, args, reply)
 
-			if ok {
+			if rf.sendRequestVote(peerIndex, args, reply) {
 				rf.mu.Lock()
 				defer rf.mu.Unlock()
 				// valid reply (non-outdated)
@@ -156,7 +156,7 @@ func (rf *Raft) startElection() {
 // heartsbeats recently.
 
 func (rf *Raft) startElectionTicker() {
-	for rf.killed() == false {
+	for !rf.killed() {
 
 		// Your code here to check if a leader election should
 		// be started and to randomize sleeping time using
