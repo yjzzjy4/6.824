@@ -141,20 +141,20 @@ func (rf *Raft) readPersist(data []byte) {
 	}
 	// Your code here (2C).
 	// Example:
-	r := bytes.NewBuffer(data)
-	d := labgob.NewDecoder(r)
-	var currentTerm int
-	var votedFor int
-	var logs []LogEntry
-	if d.Decode(&currentTerm) != nil ||
-		d.Decode(&votedFor) != nil ||
-		d.Decode(&logs) != nil {
-		// 233
-	} else {
-		rf.currentTerm = currentTerm
-		rf.votedFor = votedFor
-		rf.logs = logs
-	}
+	//r := bytes.NewBuffer(data)
+	//d := labgob.NewDecoder(r)
+	//var currentTerm int
+	//var votedFor int
+	//var logs []LogEntry
+	//if d.Decode(&currentTerm) != nil ||
+	//	d.Decode(&votedFor) != nil ||
+	//	d.Decode(&logs) != nil {
+	//	// 233
+	//} else {
+	//	rf.currentTerm = currentTerm
+	//	rf.votedFor = votedFor
+	//	rf.logs = logs
+	//}
 }
 
 //
@@ -206,7 +206,7 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 	// append entry to leader's logs, will be syncing during next heartbeat
 	rf.logs = append(rf.logs, LogEntry{Command: command, Term: rf.currentTerm})
 
-	rf.persist()
+	// rf.persist()
 
 	return len(rf.logs) - 1, rf.currentTerm, true
 }

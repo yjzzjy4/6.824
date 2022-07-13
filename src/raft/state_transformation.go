@@ -12,7 +12,7 @@ func (rf *Raft) toFollower() {
 	rf.state = FOLLOWER
 	rf.votedFor = -1
 	rf.voteCount = 0
-	rf.persist()
+	// rf.persist()
 }
 
 func (rf *Raft) toCandidate() {
@@ -21,7 +21,7 @@ func (rf *Raft) toCandidate() {
 	rf.votedFor = rf.me
 	rf.voteCount = 1
 	rf.resetElectionTimer()
-	rf.persist()
+	// rf.persist()
 	rf.startElection()
 }
 

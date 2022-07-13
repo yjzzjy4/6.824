@@ -1,6 +1,7 @@
 package raft
 
 import (
+	"fmt"
 	"time"
 )
 
@@ -80,12 +81,13 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		// #3, conflict occurs, truncate peer's logs
 		if entryIndex < len(rf.logs) && rf.logs[entryIndex].Term != entry.Term {
 			rf.logs = rf.logs[:entryIndex]
-			rf.persist()
+			fmt.Printf("peerId: %v, peerTerm: %v, leaderId: %v, leaderTerm: %v\n", rf.me, rf.currentTerm, args.LeaderId, args.Term)
+			// rf.persist()
 		}
 		// #4, append new entries (if any)
 		if entryIndex >= len(rf.logs) {
 			rf.logs = append(rf.logs, args.Entries[i:]...)
-			rf.persist()
+			// rf.persist()
 			break
 		}
 	}
@@ -140,6 +142,7 @@ func (rf *Raft) startAppendEntries() {
 			if rf.sendAppendEntries(peerIndex, args, reply) {
 				rf.mu.Lock()
 				defer rf.mu.Unlock()
+
 				// valid reply (non-outdated)
 				if args.Term == rf.currentTerm {
 					// higher Term discovered, step down to follower
@@ -230,8 +233,11 @@ func (rf *Raft) applier() {
 				Command:      rf.logs[rf.lastApplied].Command,
 				CommandIndex: rf.lastApplied,
 			}
+			isLeader := rf.state == LEADER
+			applyTerm := rf.logs[rf.lastApplied].Term
 			rf.mu.Unlock()
 			rf.applyMsgCh <- applyMsg
+			fmt.Printf("%v is leader: %v, has applied a command at index: %v, term: %v, with content: %v\n", rf.me, isLeader, applyMsg.CommandIndex, applyTerm, applyMsg.Command)
 			rf.mu.Lock()
 		} else {
 			rf.applyCond.Wait()

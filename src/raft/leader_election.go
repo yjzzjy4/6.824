@@ -1,6 +1,7 @@
 package raft
 
 import (
+	"fmt"
 	"math/rand"
 	"time"
 )
@@ -57,12 +58,17 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	// #2
 	if rf.votedFor == -1 || rf.votedFor == args.CandidateId {
 		// compare whose log is up-to-date;
-		if args.LastLogTerm > rf.logs[len(rf.logs)-1].Term || args.LastLogTerm == rf.logs[len(rf.logs)-1].Term && args.LastLogIndex >= len(rf.logs)-1 {
+		if args.LastLogTerm > rf.logs[len(rf.logs)-1].Term ||
+			args.LastLogTerm == rf.logs[len(rf.logs)-1].Term && args.LastLogIndex >= len(rf.logs)-1 {
 			// grant vote and reset election timer;
 			rf.votedFor = args.CandidateId
 			reply.VoteGranted = true
+			fmt.Printf("%v has voted for %v, at term %v, currentTerm %v, candidate.LastLogTerm: %v, voter.LastLogTerm: %v, candidate.LastLogIndex: %v, voter.LastLogIndex: %v\n", rf.me, args.CandidateId, args.Term, rf.currentTerm, args.LastLogTerm, rf.logs[len(rf.logs)-1].Term, args.LastLogIndex, len(rf.logs)-1)
+			//for i, entry := range rf.logs {
+			//	fmt.Printf("%v, index: %v, term: %v\n", rf.me, i, entry.Term)
+			//}
 			rf.resetElectionTimer()
-			rf.persist()
+			// rf.persist()
 		}
 	}
 }
