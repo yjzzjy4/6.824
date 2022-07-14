@@ -36,8 +36,10 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 
 	// received a higher Term, change this server to follower
 	if args.Term > rf.currentTerm {
-		rf.toFollower()
-		rf.currentTerm = args.Term
+		//rf.toFollower()
+		//rf.currentTerm = args.Term
+		//rf.persist()
+		rf.adoptHigherTerm(args.Term)
 	}
 
 	// candidate -> follower
@@ -80,10 +82,12 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		// #3, conflict occurs, truncate peer's logs
 		if entryIndex < len(rf.logs) && rf.logs[entryIndex].Term != entry.Term {
 			rf.logs = rf.logs[:entryIndex]
+			rf.persist()
 		}
 		// #4, append new entries (if any)
 		if entryIndex >= len(rf.logs) {
 			rf.logs = append(rf.logs, args.Entries[i:]...)
+			rf.persist()
 			break
 		}
 	}
@@ -148,8 +152,10 @@ func (rf *Raft) startAppendEntries() {
 				if args.Term == rf.currentTerm {
 					// higher Term discovered, step down to follower
 					if reply.Term > rf.currentTerm {
-						rf.toFollower()
-						rf.currentTerm = reply.Term
+						//rf.toFollower()
+						//rf.currentTerm = reply.Term
+						//rf.persist()
+						rf.adoptHigherTerm(args.Term)
 					}
 					// server remains being leader
 					if rf.state == LEADER {

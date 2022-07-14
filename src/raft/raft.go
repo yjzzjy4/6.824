@@ -17,6 +17,11 @@ package raft
 //   in the same server.
 //
 import (
+	"6.824/labgob"
+	"bytes"
+	"fmt"
+	"log"
+
 	//	"bytes"
 	"sync"
 	"sync/atomic"
@@ -110,13 +115,13 @@ func (rf *Raft) GetState() (int, bool) {
 func (rf *Raft) persist() {
 	// Your code here (2C).
 	// Example:
-	//w := new(bytes.Buffer)
-	//e := labgob.NewEncoder(w)
-	//e.Encode(rf.currentTerm)
-	//e.Encode(rf.votedFor)
-	//e.Encode(rf.logs)
-	//data := w.Bytes()
-	//rf.persister.SaveRaftState(data)
+	w := new(bytes.Buffer)
+	e := labgob.NewEncoder(w)
+	e.Encode(rf.currentTerm)
+	e.Encode(rf.votedFor)
+	e.Encode(rf.logs)
+	data := w.Bytes()
+	rf.persister.SaveRaftState(data)
 }
 
 //
@@ -128,20 +133,22 @@ func (rf *Raft) readPersist(data []byte) {
 	}
 	// Your code here (2C).
 	// Example:
-	//r := bytes.NewBuffer(data)
-	//d := labgob.NewDecoder(r)
-	//var currentTerm int
-	//var votedFor int
-	//var logs []LogEntry
-	//if d.Decode(&currentTerm) != nil ||
-	//	d.Decode(&votedFor) != nil ||
-	//	d.Decode(&logs) != nil {
-	//	// 233
-	//} else {
-	//	rf.currentTerm = currentTerm
-	//	rf.votedFor = votedFor
-	//	rf.logs = logs
-	//}
+	r := bytes.NewBuffer(data)
+	d := labgob.NewDecoder(r)
+	var currentTerm int
+	var votedFor int
+	var logs []LogEntry
+	if d.Decode(&currentTerm) != nil ||
+		d.Decode(&votedFor) != nil ||
+		d.Decode(&logs) != nil {
+		// decode error...
+		log.Fatal("failed to read persisted data\n")
+	} else {
+		rf.currentTerm = currentTerm
+		rf.votedFor = votedFor
+		rf.logs = logs
+		fmt.Printf("%v has booted! with term: %v, votedFor: %v, log len: %v\n", rf.me, rf.currentTerm, rf.votedFor, len(rf.logs))
+	}
 }
 
 // CondInstallSnapshot
@@ -190,6 +197,8 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 
 	// append entry to leader's logs, will be syncing during next heartbeat
 	rf.logs = append(rf.logs, LogEntry{Command: command, Term: rf.currentTerm})
+
+	rf.persist()
 
 	return len(rf.logs) - 1, rf.currentTerm, true
 }

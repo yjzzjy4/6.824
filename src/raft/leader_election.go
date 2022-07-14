@@ -51,8 +51,10 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 
 	// received a higher Term, change this server to follower
 	if args.Term > rf.currentTerm {
-		rf.toFollower()
-		rf.currentTerm = args.Term
+		//rf.toFollower()
+		//rf.currentTerm = args.Term
+		//rf.persist()
+		rf.adoptHigherTerm(args.Term)
 	}
 
 	reply.Term = rf.currentTerm
@@ -66,6 +68,7 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 			// grant vote and reset election timer;
 			rf.votedFor = args.CandidateId
 			reply.VoteGranted = true
+			rf.persist()
 			rf.resetElectionTimer()
 		}
 	}
@@ -136,8 +139,10 @@ func (rf *Raft) startElection() {
 				if args.Term == rf.currentTerm {
 					// higher Term discovered, step down to follower
 					if reply.Term > rf.currentTerm {
-						rf.toFollower()
-						rf.currentTerm = reply.Term
+						//rf.toFollower()
+						//rf.currentTerm = reply.Term
+						//rf.persist()
+						rf.adoptHigherTerm(args.Term)
 					}
 					// server are still voting
 					if rf.state == CANDIDATE {
