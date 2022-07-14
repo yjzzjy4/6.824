@@ -1,16 +1,14 @@
 package raft
 
 import (
-	"fmt"
 	"math/rand"
 	"time"
 )
 
-//
+// RequestVoteArgs
 // example RequestVote RPC arguments structure.
 // field names must start with capital letters!
 //
-
 type RequestVoteArgs struct {
 	// Your data here (2A, 2B).
 	Term         int
@@ -19,11 +17,10 @@ type RequestVoteArgs struct {
 	LastLogTerm  int
 }
 
-//
+// RequestVoteReply
 // example RequestVote RPC reply structure.
 // field names must start with capital letters!
 //
-
 type RequestVoteReply struct {
 	// Your data here (2A).
 	Term        int
@@ -31,9 +28,15 @@ type RequestVoteReply struct {
 }
 
 //
+// reset election timeout.
+//
+func (rf *Raft) resetElectionTimer() {
+	rf.heartBeatTime = time.Now()
+}
+
+//
 // RequestVote RPC handler.
 //
-
 func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	// Your code here (2A, 2B).
 	rf.mu.Lock()
@@ -48,9 +51,8 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 
 	// received a higher Term, change this server to follower
 	if args.Term > rf.currentTerm {
-		rf.currentTerm = args.Term
-		fmt.Printf("%v, to term: %v, is leader: %v, reason: adopt higher term in RequestVote.\n", rf.me, rf.currentTerm, rf.state == LEADER)
 		rf.toFollower()
+		rf.currentTerm = args.Term
 	}
 
 	reply.Term = rf.currentTerm
@@ -64,12 +66,7 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 			// grant vote and reset election timer;
 			rf.votedFor = args.CandidateId
 			reply.VoteGranted = true
-			fmt.Printf("%v has voted for %v, at term %v, currentTerm %v, candidate.LastLogTerm: %v, voter.LastLogTerm: %v, candidate.LastLogIndex: %v, voter.LastLogIndex: %v\n", rf.me, args.CandidateId, args.Term, rf.currentTerm, args.LastLogTerm, rf.logs[len(rf.logs)-1].Term, args.LastLogIndex, len(rf.logs)-1)
-			//for i, entry := range rf.logs {
-			//	fmt.Printf("%v, index: %v, term: %v\n", rf.me, i, entry.Term)
-			//}
 			rf.resetElectionTimer()
-			// rf.persist()
 		}
 	}
 }
@@ -103,24 +100,26 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 // that the caller passes the address of the reply struct with &, not
 // the struct itself.
 //
-
 func (rf *Raft) sendRequestVote(server int, args *RequestVoteArgs, reply *RequestVoteReply) bool {
 	ok := rf.peers[server].Call("Raft.RequestVote", args, reply)
 	return ok
 }
 
-/**
- * candidate starts an election
- */
-
+// candidate starts an election.
 func (rf *Raft) startElection() {
+	voteCount := 1
 	for i := range rf.peers {
 		if i == rf.me {
 			continue
 		}
 		// send request vote RPC in parallel
-		go func(peerIndex int) {
+		go func(peerIndex int, voteCount *int) {
 			rf.mu.Lock()
+			// candidate identity validation
+			if rf.state != CANDIDATE {
+				rf.mu.Unlock()
+				return
+			}
 			args := &RequestVoteArgs{
 				Term:         rf.currentTerm,
 				CandidateId:  rf.me,
@@ -137,17 +136,16 @@ func (rf *Raft) startElection() {
 				if args.Term == rf.currentTerm {
 					// higher Term discovered, step down to follower
 					if reply.Term > rf.currentTerm {
-						rf.currentTerm = reply.Term
-						fmt.Printf("%v, to term: %v, is leader: %v, reason: adopt higher term in startElection.\n", rf.me, rf.currentTerm, rf.state == LEADER)
 						rf.toFollower()
+						rf.currentTerm = reply.Term
 					}
 					// server are still voting
 					if rf.state == CANDIDATE {
 						// valid vote
 						if reply.VoteGranted {
-							rf.voteCount++
+							*voteCount++
 							// server collect majority votes, wins the election
-							if rf.voteCount > len(rf.peers)/2 {
+							if *voteCount > len(rf.peers)/2 {
 								rf.toLeader()
 								// send heartbeats to other peers immediately!
 								rf.startAppendEntries()
@@ -156,13 +154,12 @@ func (rf *Raft) startElection() {
 					}
 				}
 			}
-		}(i)
+		}(i, &voteCount)
 	}
 }
 
 // The startElectionTicker go routine starts a new election if this peer hasn't received
 // heartsbeats recently.
-
 func (rf *Raft) startElectionTicker() {
 	for !rf.killed() {
 

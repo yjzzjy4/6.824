@@ -510,11 +510,8 @@ func TestBackup2B(t *testing.T) {
 	// put leader and one follower in a partition
 	leader1 := cfg.checkOneLeader()
 	cfg.disconnect((leader1 + 2) % servers)
-	fmt.Printf("%d\n", len(cfg.rafts[(leader1+2)%servers].logs))
 	cfg.disconnect((leader1 + 3) % servers)
-	fmt.Printf("%d\n", len(cfg.rafts[(leader1+3)%servers].logs))
 	cfg.disconnect((leader1 + 4) % servers)
-	fmt.Printf("%d\n", len(cfg.rafts[(leader1+4)%servers].logs))
 
 	// submit lots of commands that won't commit
 	for i := 0; i < 50; i++ {
@@ -524,17 +521,12 @@ func TestBackup2B(t *testing.T) {
 	time.Sleep(RaftElectionTimeout / 2)
 
 	cfg.disconnect((leader1 + 0) % servers)
-	fmt.Printf("%d\n", len(cfg.rafts[(leader1+0)%servers].logs))
 	cfg.disconnect((leader1 + 1) % servers)
-	fmt.Printf("%d\n", len(cfg.rafts[(leader1+1)%servers].logs))
 
 	// allow other partition to recover
 	cfg.connect((leader1 + 2) % servers)
-	fmt.Printf("%d\n", len(cfg.rafts[(leader1+2)%servers].logs))
 	cfg.connect((leader1 + 3) % servers)
-	fmt.Printf("%d\n", len(cfg.rafts[(leader1+3)%servers].logs))
 	cfg.connect((leader1 + 4) % servers)
-	fmt.Printf("%d\n", len(cfg.rafts[(leader1+4)%servers].logs))
 
 	// lots of successful commands to new group.
 	for i := 0; i < 50; i++ {
@@ -548,7 +540,6 @@ func TestBackup2B(t *testing.T) {
 		other = (leader2 + 1) % servers
 	}
 	cfg.disconnect(other)
-	fmt.Printf("%d\n", len(cfg.rafts[other].logs))
 
 	// lots more commands that won't commit
 	for i := 0; i < 50; i++ {
@@ -560,14 +551,10 @@ func TestBackup2B(t *testing.T) {
 	// bring original leader back to life,
 	for i := 0; i < servers; i++ {
 		cfg.disconnect(i)
-		fmt.Printf("%d\n", len(cfg.rafts[i].logs))
 	}
 	cfg.connect((leader1 + 0) % servers)
-	fmt.Printf("%d\n", len(cfg.rafts[(leader1+0)%servers].logs))
 	cfg.connect((leader1 + 1) % servers)
-	fmt.Printf("%d\n", len(cfg.rafts[(leader1+1)%servers].logs))
 	cfg.connect(other)
-	fmt.Printf("%d\n", len(cfg.rafts[other].logs))
 
 	// lots of successful commands to new group.
 	for i := 0; i < 50; i++ {
@@ -577,7 +564,6 @@ func TestBackup2B(t *testing.T) {
 	// now everyone
 	for i := 0; i < servers; i++ {
 		cfg.connect(i)
-		fmt.Printf("%d\n", len(cfg.rafts[i].logs))
 	}
 	cfg.one(rand.Int(), servers, true)
 

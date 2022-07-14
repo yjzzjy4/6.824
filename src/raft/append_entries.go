@@ -1,7 +1,6 @@
 package raft
 
 import (
-	"fmt"
 	"time"
 )
 
@@ -37,9 +36,8 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 
 	// received a higher Term, change this server to follower
 	if args.Term > rf.currentTerm {
-		rf.currentTerm = args.Term
-		fmt.Printf("%v, to term: %v, is leader: %v, reason: adopt higher term in AppendEntries.\n", rf.me, rf.currentTerm, rf.state == LEADER)
 		rf.toFollower()
+		rf.currentTerm = args.Term
 	}
 
 	// candidate -> follower
@@ -82,13 +80,10 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		// #3, conflict occurs, truncate peer's logs
 		if entryIndex < len(rf.logs) && rf.logs[entryIndex].Term != entry.Term {
 			rf.logs = rf.logs[:entryIndex]
-			fmt.Printf("peerId: %v, peerTerm: %v, leaderId: %v, leaderTerm: %v\n", rf.me, rf.currentTerm, args.LeaderId, args.Term)
-			// rf.persist()
 		}
 		// #4, append new entries (if any)
 		if entryIndex >= len(rf.logs) {
 			rf.logs = append(rf.logs, args.Entries[i:]...)
-			// rf.persist()
 			break
 		}
 	}
@@ -119,8 +114,13 @@ func (rf *Raft) startAppendEntries() {
 		}
 		// send append entries RPC in parallel
 		go func(peerIndex int) {
-			var entries []LogEntry
 			rf.mu.Lock()
+			// leader identity validation
+			if rf.state != LEADER {
+				rf.mu.Unlock()
+				return
+			}
+			var entries []LogEntry
 			if len(rf.logs) > rf.nextIndex[peerIndex] {
 				entries = append(entries, rf.logs[rf.nextIndex[peerIndex]:]...)
 			}
@@ -148,9 +148,8 @@ func (rf *Raft) startAppendEntries() {
 				if args.Term == rf.currentTerm {
 					// higher Term discovered, step down to follower
 					if reply.Term > rf.currentTerm {
-						rf.currentTerm = reply.Term
-						fmt.Printf("%v, to term: %v, is leader: %v, reason: adopt higher term in startAppendEntries.\n", rf.me, rf.currentTerm, rf.state == LEADER)
 						rf.toFollower()
+						rf.currentTerm = reply.Term
 					}
 					// server remains being leader
 					if rf.state == LEADER {
@@ -201,9 +200,8 @@ func (rf *Raft) startAppendEntries() {
 	}
 }
 
-// The appendEntriesTicker go routine starts a new election if this peer hasn't received
-// heartsbeats recently.
-
+// The appendEntriesTicker go routine send new entries / heartbeat
+// to follower periodically.
 func (rf *Raft) appendEntriesTicker() {
 	for !rf.killed() {
 
@@ -218,10 +216,12 @@ func (rf *Raft) appendEntriesTicker() {
 	}
 }
 
+// trigger an entry apply.
 func (rf *Raft) apply() {
 	rf.applyCond.Broadcast()
 }
 
+// apply an entry to state machine.
 func (rf *Raft) applier() {
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
@@ -235,11 +235,8 @@ func (rf *Raft) applier() {
 				Command:      rf.logs[rf.lastApplied].Command,
 				CommandIndex: rf.lastApplied,
 			}
-			isLeader := rf.state == LEADER
-			applyTerm := rf.logs[rf.lastApplied].Term
 			rf.mu.Unlock()
 			rf.applyMsgCh <- applyMsg
-			fmt.Printf("%v is leader: %v, has applied a command at index: %v, term: %v, with content: %v\n", rf.me, isLeader, applyMsg.CommandIndex, applyTerm, applyMsg.Command)
 			rf.mu.Lock()
 		} else {
 			rf.applyCond.Wait()

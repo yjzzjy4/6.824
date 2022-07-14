@@ -16,12 +16,7 @@ package raft
 //   should send an ApplyMsg to the service (or test_results)
 //   in the same server.
 //
-
 import (
-	"6.824/labgob"
-	"bytes"
-	"fmt"
-
 	//	"bytes"
 	"sync"
 	"sync/atomic"
@@ -31,7 +26,7 @@ import (
 	"6.824/labrpc"
 )
 
-//
+// ApplyMsg
 // as each Raft peer becomes aware that successive log entries are
 // committed, the peer should send an ApplyMsg to the service (or
 // test_results) on the same server, via the applyCh passed to Make(). set
@@ -42,7 +37,6 @@ import (
 // snapshots) on the applyCh, but set CommandValid to false for these
 // other uses.
 //
-
 type ApplyMsg struct {
 	CommandValid bool
 	Command      interface{}
@@ -55,20 +49,17 @@ type ApplyMsg struct {
 	SnapshotIndex int
 }
 
-/**
- * Struct for holding log entry.
- *
- */
-
+// LogEntry
+// Struct for holding log entry.
+//
 type LogEntry struct {
 	Term    int
 	Command interface{}
 }
 
-//
+// Raft
 // A Go object implementing a single Raft peer.
 //
-
 type Raft struct {
 	mu        sync.Mutex          // Lock to protect shared access to this peer's state
 	peers     []*labrpc.ClientEnd // RPC end points of all peers
@@ -94,21 +85,16 @@ type Raft struct {
 	matchIndex []int // index of the highest log entry known to be replicated on server
 
 	// other necessary states
-	state         State // raft state
-	voteCount     int
+	state         State         // raft state
 	leaderId      int           // used by follower for redirecting client's request to leader
 	heartBeatTime time.Time     // last heartbeat time
 	applyMsgCh    chan ApplyMsg // to inform the service (or test_results) whether there are newly committed entries in this peer
-	applyCond     *sync.Cond
+	applyCond     *sync.Cond    // condition to trigger apply log entry
 }
 
-func (rf *Raft) resetElectionTimer() {
-	rf.heartBeatTime = time.Now()
-}
-
+// GetState
 // return currentTerm and whether this server
 // believes it is the leader.
-
 func (rf *Raft) GetState() (int, bool) {
 	// Your code here (2A).
 	rf.mu.Lock()
@@ -121,17 +107,16 @@ func (rf *Raft) GetState() (int, bool) {
 // where it can later be retrieved after a crash and restart.
 // see paper's Figure 2 for a description of what should be persistent.
 //
-
 func (rf *Raft) persist() {
 	// Your code here (2C).
 	// Example:
-	w := new(bytes.Buffer)
-	e := labgob.NewEncoder(w)
-	e.Encode(rf.currentTerm)
-	e.Encode(rf.votedFor)
-	e.Encode(rf.logs)
-	data := w.Bytes()
-	rf.persister.SaveRaftState(data)
+	//w := new(bytes.Buffer)
+	//e := labgob.NewEncoder(w)
+	//e.Encode(rf.currentTerm)
+	//e.Encode(rf.votedFor)
+	//e.Encode(rf.logs)
+	//data := w.Bytes()
+	//rf.persister.SaveRaftState(data)
 }
 
 //
@@ -159,11 +144,10 @@ func (rf *Raft) readPersist(data []byte) {
 	//}
 }
 
-//
+// CondInstallSnapshot
 // A service wants to switch to snapshot.  Only do so if Raft hasn't
 // have more recent info since it communicate the snapshot on applyCh.
 //
-
 func (rf *Raft) CondInstallSnapshot(lastIncludedTerm int, lastIncludedIndex int, snapshot []byte) bool {
 
 	// Your code here (2D).
@@ -171,17 +155,17 @@ func (rf *Raft) CondInstallSnapshot(lastIncludedTerm int, lastIncludedIndex int,
 	return true
 }
 
+// Snapshot
 // the service says it has created a snapshot that has
 // all info up to and including index. this means the
 // service no longer needs the log through (and including)
 // that index. Raft should now trim its log as much as possible.
-
 func (rf *Raft) Snapshot(index int, snapshot []byte) {
 	// Your code here (2D).
 
 }
 
-//
+// Start
 // the service using Raft (e.g. a k/v server) wants to start
 // agreement on the next command to be appended to Raft's log. if this
 // server isn't the leader, returns false. otherwise start the
@@ -195,7 +179,6 @@ func (rf *Raft) Snapshot(index int, snapshot []byte) {
 // term. the third return value is true if this server believes it is
 // the leader.
 //
-
 func (rf *Raft) Start(command interface{}) (int, int, bool) {
 	// Your code here (2B).
 	rf.mu.Lock()
@@ -208,12 +191,10 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 	// append entry to leader's logs, will be syncing during next heartbeat
 	rf.logs = append(rf.logs, LogEntry{Command: command, Term: rf.currentTerm})
 
-	// rf.persist()
-
 	return len(rf.logs) - 1, rf.currentTerm, true
 }
 
-//
+// Kill
 // the test_results doesn't halt goroutines created by Raft after each test,
 // but it does call the Kill() method. your code can use killed() to
 // check whether Kill() has been called. the use of atomic avoids the
@@ -224,7 +205,6 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 // confusing debug output. any goroutine with a long-running loop
 // should call killed() to check whether it should stop.
 //
-
 func (rf *Raft) Kill() {
 	atomic.StoreInt32(&rf.dead, 1)
 	// Your code here, if desired.
@@ -235,7 +215,7 @@ func (rf *Raft) killed() bool {
 	return z == 1
 }
 
-//
+// Make
 // the service or test_results wants to create a Raft server. the ports
 // of all the Raft servers (including this one) are in peers[]. this
 // server's port is peers[me]. all the servers' peers[] arrays
@@ -246,7 +226,6 @@ func (rf *Raft) killed() bool {
 // Make() must return quickly, so it should start goroutines
 // for any long-running work.
 //
-
 func Make(peers []*labrpc.ClientEnd, me int,
 	persister *Persister, applyCh chan ApplyMsg) *Raft {
 	rf := &Raft{}
@@ -257,7 +236,6 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	// Your initialization code here (2A, 2B, 2C).
 	rf.leaderId = -1
 	rf.currentTerm = 0
-	fmt.Printf("%v, to term: %v, reason: server init.\n", rf.me, rf.currentTerm)
 	rf.commitIndex = 0
 	rf.lastApplied = 0
 	rf.logs = append(rf.logs, LogEntry{0, 0})
@@ -277,7 +255,7 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	// start appendEntriesTicker goroutine to start append entries / send heartbeats
 	go rf.appendEntriesTicker()
 
-	// start applyEntriesTicker goroutine to apply entries to each peer's state machine
+	// start applier goroutine to apply entries to each peer's state machine
 	go rf.applier()
 
 	return rf
