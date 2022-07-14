@@ -38,6 +38,7 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	// received a higher Term, change this server to follower
 	if args.Term > rf.currentTerm {
 		rf.currentTerm = args.Term
+		fmt.Printf("%v, to term: %v, is leader: %v, reason: adopt higher term in AppendEntries.\n", rf.me, rf.currentTerm, rf.state == LEADER)
 		rf.toFollower()
 	}
 
@@ -148,6 +149,7 @@ func (rf *Raft) startAppendEntries() {
 					// higher Term discovered, step down to follower
 					if reply.Term > rf.currentTerm {
 						rf.currentTerm = reply.Term
+						fmt.Printf("%v, to term: %v, is leader: %v, reason: adopt higher term in startAppendEntries.\n", rf.me, rf.currentTerm, rf.state == LEADER)
 						rf.toFollower()
 					}
 					// server remains being leader

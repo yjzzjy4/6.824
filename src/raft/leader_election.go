@@ -49,6 +49,7 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	// received a higher Term, change this server to follower
 	if args.Term > rf.currentTerm {
 		rf.currentTerm = args.Term
+		fmt.Printf("%v, to term: %v, is leader: %v, reason: adopt higher term in RequestVote.\n", rf.me, rf.currentTerm, rf.state == LEADER)
 		rf.toFollower()
 	}
 
@@ -137,6 +138,7 @@ func (rf *Raft) startElection() {
 					// higher Term discovered, step down to follower
 					if reply.Term > rf.currentTerm {
 						rf.currentTerm = reply.Term
+						fmt.Printf("%v, to term: %v, is leader: %v, reason: adopt higher term in startElection.\n", rf.me, rf.currentTerm, rf.state == LEADER)
 						rf.toFollower()
 					}
 					// server are still voting
