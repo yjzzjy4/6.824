@@ -1,6 +1,7 @@
 package raft
 
 import (
+	"fmt"
 	"math/rand"
 	"time"
 )
@@ -51,10 +52,11 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 
 	// received a higher Term, change this server to follower
 	if args.Term > rf.currentTerm {
-		//rf.toFollower()
-		//rf.currentTerm = args.Term
-		//rf.persist()
-		rf.adoptHigherTerm(args.Term)
+		rf.toFollower()
+		rf.currentTerm = args.Term
+		rf.persist()
+		fmt.Printf("%v, to term: %v, is leader: %v, reason: adopt higher term in RequestVote.\n", rf.me, rf.currentTerm, rf.state == LEADER)
+		//rf.adoptHigherTerm(args.Term)
 	}
 
 	reply.Term = rf.currentTerm
@@ -139,10 +141,11 @@ func (rf *Raft) startElection() {
 				if args.Term == rf.currentTerm {
 					// higher Term discovered, step down to follower
 					if reply.Term > rf.currentTerm {
-						//rf.toFollower()
-						//rf.currentTerm = reply.Term
-						//rf.persist()
-						rf.adoptHigherTerm(args.Term)
+						rf.toFollower()
+						rf.currentTerm = reply.Term
+						rf.persist()
+						fmt.Printf("%v, to term: %v, is leader: %v, reason: adopt higher term in startElection.\n", rf.me, rf.currentTerm, rf.state == LEADER)
+						//rf.adoptHigherTerm(args.Term)
 					}
 					// server are still voting
 					if rf.state == CANDIDATE {

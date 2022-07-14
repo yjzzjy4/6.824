@@ -245,6 +245,7 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	// Your initialization code here (2A, 2B, 2C).
 	rf.leaderId = -1
 	rf.currentTerm = 0
+	fmt.Printf("%v, to term: %v, reason: server init.\n", rf.me, rf.currentTerm)
 	rf.commitIndex = 0
 	rf.lastApplied = 0
 	rf.logs = append(rf.logs, LogEntry{0, 0})
