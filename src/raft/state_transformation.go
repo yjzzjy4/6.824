@@ -1,7 +1,5 @@
 package raft
 
-import "fmt"
-
 type State int
 
 const (
@@ -28,7 +26,7 @@ func (rf *Raft) toFollower() {
 func (rf *Raft) toCandidate() {
 	rf.state = CANDIDATE
 	rf.currentTerm++
-	fmt.Printf("%v, to term: %v, reason: start election.\n", rf.me, rf.currentTerm)
+	//fmt.Printf("%v, to term: %v, reason: start election.\n", rf.me, rf.currentTerm)
 	rf.votedFor = rf.me
 	rf.persist()
 	rf.resetElectionTimer()

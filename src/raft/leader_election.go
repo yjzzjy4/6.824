@@ -1,7 +1,6 @@
 package raft
 
 import (
-	"fmt"
 	"math/rand"
 	"time"
 )
@@ -55,7 +54,7 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 		rf.toFollower()
 		rf.currentTerm = args.Term
 		rf.persist()
-		fmt.Printf("%v, to term: %v, is leader: %v, reason: adopt higher term in RequestVote.\n", rf.me, rf.currentTerm, rf.state == LEADER)
+		//fmt.Printf("%v, to term: %v, is leader: %v, reason: adopt higher term in RequestVote.\n", rf.me, rf.currentTerm, rf.state == LEADER)
 		//rf.adoptHigherTerm(args.Term)
 	}
 
@@ -144,7 +143,7 @@ func (rf *Raft) startElection() {
 						rf.toFollower()
 						rf.currentTerm = reply.Term
 						rf.persist()
-						fmt.Printf("%v, to term: %v, is leader: %v, reason: adopt higher term in startElection.\n", rf.me, rf.currentTerm, rf.state == LEADER)
+						//fmt.Printf("%v, to term: %v, is leader: %v, reason: adopt higher term in startElection.\n", rf.me, rf.currentTerm, rf.state == LEADER)
 						//rf.adoptHigherTerm(args.Term)
 					}
 					// server are still voting
@@ -178,7 +177,7 @@ func (rf *Raft) startElectionTicker() {
 		// randomized election timeout (200 - 400ms)
 		timeBeforeSleep := time.Now()
 		rand.Seed(time.Now().Unix() + int64(rf.me))
-		time.Sleep(time.Duration(rand.Intn(201)+200) * time.Millisecond)
+		time.Sleep(time.Duration(rand.Intn(201)+300) * time.Millisecond)
 
 		rf.mu.Lock()
 		// election timeout, start new election

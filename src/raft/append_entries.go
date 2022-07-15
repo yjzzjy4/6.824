@@ -1,7 +1,6 @@
 package raft
 
 import (
-	"fmt"
 	"time"
 )
 
@@ -40,7 +39,7 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		rf.toFollower()
 		rf.currentTerm = args.Term
 		rf.persist()
-		fmt.Printf("%v, to term: %v, is leader: %v, reason: adopt higher term in AppendEntries.\n", rf.me, rf.currentTerm, rf.state == LEADER)
+		//fmt.Printf("%v, to term: %v, is leader: %v, reason: adopt higher term in AppendEntries.\n", rf.me, rf.currentTerm, rf.state == LEADER)
 		//rf.adoptHigherTerm(args.Term)
 	}
 
@@ -85,7 +84,7 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		if entryIndex < len(rf.logs) && rf.logs[entryIndex].Term != entry.Term {
 			rf.logs = rf.logs[:entryIndex]
 			rf.persist()
-			fmt.Printf("peerId: %v, peerTerm: %v, leaderId: %v, leaderTerm: %v\n", rf.me, rf.currentTerm, args.LeaderId, args.Term)
+			//fmt.Printf("peerId: %v, peerTerm: %v, leaderId: %v, leaderTerm: %v\n", rf.me, rf.currentTerm, args.LeaderId, args.Term)
 		}
 		// #4, append new entries (if any)
 		if entryIndex >= len(rf.logs) {
@@ -158,7 +157,7 @@ func (rf *Raft) startAppendEntries() {
 						rf.toFollower()
 						rf.currentTerm = reply.Term
 						rf.persist()
-						fmt.Printf("%v, to term: %v, is leader: %v, reason: adopt higher term in startAppendEntries.\n", rf.me, rf.currentTerm, rf.state == LEADER)
+						//fmt.Printf("%v, to term: %v, is leader: %v, reason: adopt higher term in startAppendEntries.\n", rf.me, rf.currentTerm, rf.state == LEADER)
 						//rf.adoptHigherTerm(args.Term)
 					}
 					// server remains being leader
@@ -245,11 +244,11 @@ func (rf *Raft) applier() {
 				Command:      rf.logs[rf.lastApplied].Command,
 				CommandIndex: rf.lastApplied,
 			}
-			isLeader := rf.state == LEADER
-			applyTerm := rf.logs[rf.lastApplied].Term
+			//isLeader := rf.state == LEADER
+			//applyTerm := rf.logs[rf.lastApplied].Term
 			rf.mu.Unlock()
 			rf.applyMsgCh <- applyMsg
-			fmt.Printf("%v is leader: %v, has applied a command at index: %v, term: %v, with content: %v\n", rf.me, isLeader, applyMsg.CommandIndex, applyTerm, applyMsg.Command)
+			//fmt.Printf("%v is leader: %v, has applied a command at index: %v, term: %v, with content: %v\n", rf.me, isLeader, applyMsg.CommandIndex, applyTerm, applyMsg.Command)
 			rf.mu.Lock()
 		} else {
 			rf.applyCond.Wait()

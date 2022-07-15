@@ -1,4 +1,0 @@
-2022/07/14 20:38:12 2: log map[1:11]; server map[1:11]
-2022/07/14 20:38:12 2: log map[1:11]; server map[1:11]
-2022/07/14 20:38:12 2: log map[1:11]; server map[1:11]
-2022/07/14 20:38:12 apply error: commit index=1 server=2 12 != server=2 11

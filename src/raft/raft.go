@@ -19,7 +19,6 @@ package raft
 import (
 	"6.824/labgob"
 	"bytes"
-	"fmt"
 	"log"
 
 	//	"bytes"
@@ -122,6 +121,7 @@ func (rf *Raft) persist() {
 	e.Encode(rf.logs)
 	data := w.Bytes()
 	rf.persister.SaveRaftState(data)
+	//fmt.Printf("%v, has persisted, currentTerm: %v, votedFor: %v, log len: %v\n", rf.me, rf.currentTerm, rf.votedFor, len(rf.logs))
 }
 
 //
@@ -147,7 +147,7 @@ func (rf *Raft) readPersist(data []byte) {
 		rf.currentTerm = currentTerm
 		rf.votedFor = votedFor
 		rf.logs = logs
-		fmt.Printf("%v has booted! with term: %v, votedFor: %v, log len: %v\n", rf.me, rf.currentTerm, rf.votedFor, len(rf.logs))
+		//fmt.Printf("%v has booted! with term: %v, votedFor: %v, log len: %v\n", rf.me, rf.currentTerm, rf.votedFor, len(rf.logs))
 	}
 }
 
@@ -245,7 +245,7 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	// Your initialization code here (2A, 2B, 2C).
 	rf.leaderId = -1
 	rf.currentTerm = 0
-	fmt.Printf("%v, to term: %v, reason: server init.\n", rf.me, rf.currentTerm)
+	//fmt.Printf("%v, to term: %v, reason: server init.\n", rf.me, rf.currentTerm)
 	rf.commitIndex = 0
 	rf.lastApplied = 0
 	rf.logs = append(rf.logs, LogEntry{0, 0})
@@ -253,7 +253,8 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf.matchIndex = make([]int, len(rf.peers))
 	rf.applyMsgCh = applyCh
 	rf.applyCond = sync.NewCond(&rf.mu)
-	rf.toFollower()
+	rf.state = FOLLOWER
+	rf.votedFor = -1
 	rf.resetElectionTimer()
 
 	// initialize from state persisted before a crash
