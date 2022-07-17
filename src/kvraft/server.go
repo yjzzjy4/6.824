@@ -45,7 +45,7 @@ func (kv *KVServer) PutAppend(args *PutAppendArgs, reply *PutAppendReply) {
 }
 
 //
-// the test_results calls Kill() when a KVServer instance won't
+// the tester calls Kill() when a KVServer instance won't
 // be needed again. for your convenience, we supply
 // code to set rf.dead (without needing a lock),
 // and a killed() method to test rf.dead in

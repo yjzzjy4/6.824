@@ -12,7 +12,7 @@ import "sync/atomic"
 import "fmt"
 import "io/ioutil"
 
-// The test_results generously allows solutions to complete elections in one second
+// The tester generously allows solutions to complete elections in one second
 // (much more than the paper's range of timeouts).
 const electionTimeout = 1 * time.Second
 

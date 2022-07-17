@@ -26,7 +26,7 @@
 # The options you can specify on the command line are:
 #
 #   [-r | --rounds]                  how many rounds to run the tester (defaults to 100)
-#   [-p | --parallelisms]            how many testers to run in parallel (defaults to the number of CPUs)
+#   [-p | --processes]               how many tester processes to run in parallel (defaults to the number of CPUs)
 #   [-t | --test-pattern]            which subset of the tests to run (default to all tests)
 #   [-c | --clear-results-directory] delete all files in results directory
 #   [-race]                          whether to enable go's data race detector
@@ -43,32 +43,31 @@
 # If you still want to read the code, go ahead.
 
 # results output directory
-dir='test_results'
+dir='test-results'
 
-# whether to enable go's data race detector
-race=false
-
-# whether to clear results output directory
+# default argument values
+rounds=100
+processes=$(grep -c processor /proc/cpuinfo)
+test=''
 clear_dir=false
+race=false
 
 while [[ $# -gt 0 ]]; do
   case $1 in
   -r | --rounds)
-    rounds="$2"
-    if ! [[ $rounds =~ ^[1-9][0-9]+$ ]]; then
-      rounds=100
+    if [[ $2 =~ ^[1-9][0-9]*$ ]]; then
+      rounds=$2
     fi
     shift 2
     ;;
-  -p | --parallelisms)
-    parallelism="$2"
-    if ! [[ $parallelism =~ ^[1-9][0-9]+$ ]]; then
-      parallelism=$(grep -c processor /proc/cpuinfo)
+  -p | --processes)
+    if [[ $2 =~ ^[1-9][0-9]*$ ]]; then
+      processes=$2
     fi
     shift 2
     ;;
   -t | --test-pattern)
-    test="$2"
+    test=$2
     shift 2
     ;;
   -c | --clear-results-directory)
@@ -80,9 +79,12 @@ while [[ $# -gt 0 ]]; do
     shift
     ;;
   -h | --help)
-    echo "Usage: $0 [--rounds 100] [--parallelisms #cpus] [--test-pattern ''] [--clear-results-directory] [-race]"
+    echo "Usage: $0 [--rounds r] [--processes p] [--test-pattern ''] [--clear-results-directory] [-race]"
     echo "Or in short form:"
-    echo "Usage: $0 [-r 100] [-p #cpus] [-t ''] [-c] [-race]"
+    echo "Usage: $0 [-r r] [-p p] [-t ''] [-c] [-race]"
+    echo ""
+    echo "By default, this script runs with the form as below:"
+    echo "$0 -r 100 -p #cpus -t ''"
     exit 0
     ;;
   -*)
@@ -111,8 +113,10 @@ mkdir -p $dir
 
 if $clear_dir; then
   rm -rf ${dir:?}/*
-  echo -e "\e[4;36mAll files in $(pwd)/$dir are deleted!\e[0m"
+  echo -e "\e[1;35mAll files in ./$dir are deleted!\e[0m"
 fi
+
+echo -e "\e[1;94mBench tests config \U00bb [test pattern: '$test', rounds: $rounds, processes: $processes, enable data race detector: $race, test results directory: ./$dir]\e[0m"
 
 # Figure out where we left off.
 logs=$(find $dir -maxdepth 1 -name 'test-*.log' -type f -printf '.' | wc -c)
@@ -152,7 +156,7 @@ is=()    # and which iteration does each one correspond to?
 # It kills any remaining tests and removes their output files before exiting.
 cleanup() {
   for pid in "${waits[@]}"; do
-    kill "$pid"
+    kill "$pid" 2> /dev/null
     wait "$pid"
     rm -rf "$dir/test-${is[0]}.err" "$dir/test-${is[0]}.log"
     is=("${is[@]:1}")
@@ -165,7 +169,7 @@ trap cleanup SIGHUP SIGINT SIGTERM
 for i in $(seq "$((success + failed + 1))" "$rounds"); do
   # If we have already spawned the max # of testers, wait for one to
   # finish. We'll wait for the oldest one because it's easy.
-  if [[ ${#waits[@]} -eq "$parallelism" ]]; then
+  if [[ ${#waits[@]} -eq "$processes" ]]; then
     finish "${waits[0]}"
     waits=("${waits[@]:1}") # this funky syntax removes the first
     is=("${is[@]:1}")       # element from the array

@@ -37,7 +37,7 @@ func (sc *ShardCtrler) Query(args *QueryArgs, reply *QueryReply) {
 }
 
 //
-// the test_results calls Kill() when a ShardCtrler instance won't
+// the tester calls Kill() when a ShardCtrler instance won't
 // be needed again. you are not required to do anything
 // in Kill(), but it might be convenient to (for example)
 // turn off debug output from this instance.
@@ -47,7 +47,7 @@ func (sc *ShardCtrler) Kill() {
 	// Your code here, if desired.
 }
 
-// needed by shardkv test_results
+// needed by shardkv tester
 func (sc *ShardCtrler) Raft() *raft.Raft {
 	return sc.rf
 }

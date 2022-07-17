@@ -54,8 +54,6 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 		rf.toFollower()
 		rf.currentTerm = args.Term
 		rf.persist()
-		//fmt.Printf("%v, to term: %v, is leader: %v, reason: adopt higher term in RequestVote.\n", rf.me, rf.currentTerm, rf.state == LEADER)
-		//rf.adoptHigherTerm(args.Term)
 	}
 
 	reply.Term = rf.currentTerm
@@ -143,8 +141,6 @@ func (rf *Raft) startElection() {
 						rf.toFollower()
 						rf.currentTerm = reply.Term
 						rf.persist()
-						//fmt.Printf("%v, to term: %v, is leader: %v, reason: adopt higher term in startElection.\n", rf.me, rf.currentTerm, rf.state == LEADER)
-						//rf.adoptHigherTerm(args.Term)
 					}
 					// server are still voting
 					if rf.state == CANDIDATE {
@@ -166,7 +162,7 @@ func (rf *Raft) startElection() {
 }
 
 // The startElectionTicker go routine starts a new election if this peer hasn't received
-// heartsbeats recently.
+// heartbeats recently.
 func (rf *Raft) startElectionTicker() {
 	for !rf.killed() {
 
@@ -174,7 +170,7 @@ func (rf *Raft) startElectionTicker() {
 		// be started and to randomize sleeping time using
 		// time.Sleep().
 
-		// randomized election timeout (200 - 400ms)
+		// randomized election timeout (300 - 500ms)
 		timeBeforeSleep := time.Now()
 		rand.Seed(time.Now().Unix() + int64(rf.me))
 		time.Sleep(time.Duration(rand.Intn(201)+300) * time.Millisecond)
