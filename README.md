@@ -1,6 +1,6 @@
 # Introduction
 
-This document is for recording some problems or hints the author have met or concluded during the process of implementing raft (MIT 6.824 lab2 experiment).
+This document is for recording some problems or hints the author have met or concluded during the process of implementing raft ([MIT 6.824 lab2](https://pdos.csail.mit.edu/6.824/labs/lab-raft.html) experiment).
 
 ## Before started
 
@@ -39,7 +39,18 @@ Not many tricky problems, but some hints:
 0. Server adopted a higher term before step down to follower;
 1. Before sending `AppendEntries RPC`s to others, not validating whether this server is (still) leader.
 
+It's not easy to explain the scenario, one way to reproduce the problem is when a *partitioned leader* went back to the system, received a higher term from RPC reply and adopted it, if he adopted the term before step down to follower, and meanwhile it happens to be the time for him to send `AppendEntries RPC`s to others, it could lead to critical mistakes:
 
+- the reconnected leader is outdated, but he doesn't think so. For he keeps the leader identity, and (probably) with the latest term (due to some server's reply, he adopted a higher term);
+- the others received `AppendEntries RPC` from the outdated leader, *perhaps with higher term than last time*, they're confused, but they would accept this RPC, and **trim their logs and append the outdated leader's if conflict happens**;
+- *the outdated leader wins the election*, and apply entries right after the index when he was disconnected before, this leads to an apply error: same index, different command!
+- *even if the outdated leader fails the election*, the other server that trimmed their logs and appended the outdated leader's logs would still apply the wrong command!
+
+This could happen when a leader and some of followers are disconnected, and then reconnected back to the system, those followers kick off the current leader, and rise the term of the outdated leader, the the outdated leader then starts to overwrite other followers' logs through `AppendEntries RPC`, the outdated leader didn't step down to follower until he overwrote a majority of followers' logs. Then, election begins, the outdated leader wins the election, leading to that error.
+
+Even if the outdated leader didn't win the election, as long as he overwrote some of the followers' logs before they could apply all their original logs (the ones before being overwritten) to the state machine, they could probably apply with the outdated logs later.
+
+The last but two test case for part 2B simulates the situation as we described above, read the code from test case: **Test (2B): leader backs up quickly over incorrect follower logs**, you may need to print some logs, then you will see what's going on when this problem happens.
 
 #### Solution for 'apply error'
 
@@ -47,13 +58,9 @@ According to the [Students' Guide to Raft](https://thesquareplanet.com/blog/stud
 
 > For example, if you have already voted in the current term, and an incoming `RequestVote` RPC has a higher term that you, you should *first* step down and adopt their term (thereby resetting `votedFor`), and *then* handle the RPC...
 
-- For cause 0: 
+- You should *first* step down and adopt a higher term.
 
-    You should *first* step down and adopt a higher term.
-
-- For cause 1: 
-
-    Validating the server's Identity (it could step down after received a reply from previous `AppendEntries RPC`) before send a new `AppendEntries RPC` to other server.
+- Validating the server's Identity (it could step down after received a reply from previous `AppendEntries RPC`) before send a new `AppendEntries RPC` to other server.
 
 ### Part 2C
 
@@ -106,7 +113,7 @@ func Make(peers []*labrpc.ClientEnd, me int,
 }
 ```
 
-Clearly, in `Make` function, the server persist its states before it recovers from the previous persisted states, the new persisted states **overwrite** the old one even before it can be read. This leads to a serve malfunction: <u>the previous persisted states are overwritten with default states</u>, next time the server apply a log entry for the same apply index, it will be a totally different one from the previous applied.
+Clearly, in `Make` function, the server persist its states (inside `rf.toFollower()`) before it recovers from the previous persisted states, the new persisted states **overwrite** the old one even before it can be read. This leads to a serve malfunction: <u>the previous persisted states are overwritten with default states</u>, next time the server apply a log entry for the same apply index, it will be a totally different one from the previous applied.
 
 #### Solution for 'apply error'
 
@@ -139,7 +146,7 @@ The network is messed up during the 2C tests (to simulate server's crash and res
 
 #### Solution for 'failed to reach agreement'
 
-The solution is relatively simple, I just adjusted the arguments used in the system, for instance, modify the *<u>heartbeat time</u>* and *<u>election timeout</u>*, make sure they differ a bit from each other. I tested two groups of arguments, as shown below:
+The solution is relatively simple, I just adjusted the arguments used in the system, for instance, modify the *<u>heartbeat time</u>* and *<u>election timeout</u>*, make sure they differ a bit from each other. I tested two groups of arguments, as below:
 
 - *<u>heartbeat time</u>*: 80 ms, *<u>election timeout</u>*: 200 ~ 400 ms
 - *<u>heartbeat time</u>*: 120 ms, *<u>election timeout</u>*: 300 ~ 500 ms
@@ -149,3 +156,6 @@ Those arguments all passed 1,000 rounds of test, but according to the requiremen
 > The paper's Section 5.2 mentions election timeouts in the range of 150 to 300 milliseconds. Such a range only makes sense if the leader sends heartbeats considerably more often than once per 150 milliseconds. Because the tester limits you to 10 heartbeats per second, you will have to use an election timeout larger than the paper's 150 to 300 milliseconds, but not too large, because then you may fail to elect a leader within five seconds.
 
 You might choose the latter group of arguments to meet the requirements.
+
+### Part 2D
+

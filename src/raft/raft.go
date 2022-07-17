@@ -88,6 +88,10 @@ type Raft struct {
 	nextIndex  []int // index of the next log entry to send to each server
 	matchIndex []int // index of the highest log entry known to be replicated on server
 
+	// log compaction
+	lastSnapshotIndex int // last log entry index in the latest snapshot
+	lastSnapshotTerm  int // last log entry term in the latest snapshot
+
 	// other necessary states
 	state         State         // raft state
 	leaderId      int           // used by follower for redirecting client's request to leader
@@ -147,27 +151,6 @@ func (rf *Raft) readPersist(data []byte) {
 		rf.votedFor = votedFor
 		rf.logs = logs
 	}
-}
-
-// CondInstallSnapshot
-// A service wants to switch to snapshot.  Only do so if Raft hasn't
-// have more recent info since it communicate the snapshot on applyCh.
-//
-func (rf *Raft) CondInstallSnapshot(lastIncludedTerm int, lastIncludedIndex int, snapshot []byte) bool {
-
-	// Your code here (2D).
-
-	return true
-}
-
-// Snapshot
-// the service says it has created a snapshot that has
-// all info up to and including index. this means the
-// service no longer needs the log through (and including)
-// that index. Raft should now trim its log as much as possible.
-func (rf *Raft) Snapshot(index int, snapshot []byte) {
-	// Your code here (2D).
-
 }
 
 // Start
