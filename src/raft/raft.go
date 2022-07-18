@@ -89,8 +89,9 @@ type Raft struct {
 	matchIndex []int // index of the highest log entry known to be replicated on server
 
 	// log compaction
-	lastSnapshotIndex int // last log entry index in the latest snapshot
-	lastSnapshotTerm  int // last log entry term in the latest snapshot
+	snapshot          []byte // snapshot
+	snapshotLastIndex int    // last log entry index in the latest snapshot
+	snapshotLastTerm  int    // last log entry term in the latest snapshot
 
 	// other necessary states
 	state         State         // raft state
@@ -123,6 +124,8 @@ func (rf *Raft) persist() {
 	e.Encode(rf.currentTerm)
 	e.Encode(rf.votedFor)
 	e.Encode(rf.logs)
+	//e.Encode(rf.snapshotLastIndex)
+	//e.Encode(rf.snapshotLastTerm)
 	data := w.Bytes()
 	rf.persister.SaveRaftState(data)
 }
@@ -231,6 +234,9 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf.logs = append(rf.logs, LogEntry{0, 0})
 	rf.nextIndex = make([]int, len(rf.peers))
 	rf.matchIndex = make([]int, len(rf.peers))
+	rf.snapshot = make([]byte, 0)
+	rf.snapshotLastIndex = 0
+	rf.snapshotLastTerm = 0
 	rf.applyMsgCh = applyCh
 	rf.applyCond = sync.NewCond(&rf.mu)
 	rf.state = FOLLOWER

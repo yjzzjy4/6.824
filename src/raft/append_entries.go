@@ -184,18 +184,26 @@ func (rf *Raft) startAppendEntries() {
 							// the accelerated log backtracking optimization
 							if reply.ConflictTerm == -1 {
 								rf.nextIndex[peerIndex] = reply.ConflictIndex
-								return
-							}
-							for i := len(rf.logs) - 1; i > 0; i-- {
-								if rf.logs[i].Term < reply.ConflictTerm {
-									break
+							} else {
+								foundNextIndex := false
+								for i := len(rf.logs) - 1; i > 0; i-- {
+									if rf.logs[i].Term < reply.ConflictTerm {
+										break
+									}
+									if rf.logs[i].Term == reply.ConflictTerm {
+										rf.nextIndex[peerIndex] = i + 1
+										foundNextIndex = true
+										break
+									}
 								}
-								if rf.logs[i].Term == reply.ConflictTerm {
-									rf.nextIndex[peerIndex] = i + 1
-									return
+								if !foundNextIndex {
+									rf.nextIndex[peerIndex] = reply.ConflictIndex
 								}
 							}
-							rf.nextIndex[peerIndex] = reply.ConflictIndex
+							// leader sends its snapshot to a stale follower
+							if rf.nextIndex[peerIndex] <= rf.snapshotLastIndex {
+								go rf.startInstallSnapshot(peerIndex)
+							}
 						}
 					}
 				}
