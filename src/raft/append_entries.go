@@ -56,20 +56,26 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	reply.Success = false
 
 	// #2: follower does not have prevLogIndex in its log
-	if len(rf.logs) <= args.PrevLogIndex {
-		reply.ConflictIndex = len(rf.logs)
+	if rf.lastLogIndex() < args.PrevLogIndex {
+		reply.ConflictIndex = rf.lastLogIndex() + 1
 		return
 	}
 
 	// #2: follower does have prevLogIndex in its log, but the term does not match
-	if rf.logs[args.PrevLogIndex].Term != args.PrevLogTerm {
-		reply.ConflictTerm = rf.logs[args.PrevLogIndex].Term
-		for i := args.PrevLogIndex - 1; i >= 0; i-- {
-			if rf.logs[i].Term != reply.ConflictTerm {
+	if rf.logAt(args.PrevLogIndex).Term != args.PrevLogTerm {
+		reply.ConflictTerm = rf.logAt(args.PrevLogIndex).Term
+		for i := args.PrevLogIndex - 1; i >= rf.snapshotLastIndex; i-- {
+			if rf.logAt(i).Term != reply.ConflictTerm {
 				reply.ConflictIndex = i + 1
 				break
 			}
 		}
+		return
+	}
+
+	// snapshot already contains (partial) logs from this RPC.
+	if args.PrevLogIndex < rf.snapshotLastIndex {
+		reply.ConflictIndex = rf.snapshotLastIndex
 		return
 	}
 
@@ -79,12 +85,12 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	for i, entry := range args.Entries {
 		entryIndex := i + args.PrevLogIndex + 1
 		// #3, conflict occurs, truncate peer's logs
-		if entryIndex < len(rf.logs) && rf.logs[entryIndex].Term != entry.Term {
-			rf.logs = rf.logs[:entryIndex]
+		if entryIndex <= rf.lastLogIndex() && rf.logAt(entryIndex).Term != entry.Term {
+			rf.logs = rf.logsTo(entryIndex - 1)
 			rf.persist()
 		}
 		// #4, append new entries (if any)
-		if entryIndex >= len(rf.logs) {
+		if entryIndex > rf.lastLogIndex() {
 			rf.logs = append(rf.logs, args.Entries[i:]...)
 			rf.persist()
 			break
@@ -93,10 +99,10 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 
 	// #5, set commitIndex
 	if args.LeaderCommit > rf.commitIndex {
-		if args.LeaderCommit < len(rf.logs)-1 {
+		if args.LeaderCommit < rf.lastLogIndex() {
 			rf.commitIndex = args.LeaderCommit
 		} else {
-			rf.commitIndex = len(rf.logs) - 1
+			rf.commitIndex = rf.lastLogIndex()
 		}
 		rf.apply()
 	}
@@ -118,25 +124,25 @@ func (rf *Raft) startAppendEntries() {
 		// send append entries RPC in parallel
 		go func(peerIndex int) {
 			rf.mu.Lock()
-			// leader identity validation
-			if rf.state != LEADER {
+			// leader identity validation && nextIndex validation
+			if rf.state != LEADER || rf.nextIndex[peerIndex] <= rf.snapshotLastIndex {
 				rf.mu.Unlock()
 				return
 			}
 			var entries []LogEntry
-			if len(rf.logs) > rf.nextIndex[peerIndex] {
-				entries = append(entries, rf.logs[rf.nextIndex[peerIndex]:]...)
+			if rf.lastLogIndex() >= rf.nextIndex[peerIndex] {
+				entries = append(entries, rf.logsFrom(rf.nextIndex[peerIndex])...)
 			}
 			nextIndex := rf.nextIndex[peerIndex]
-			if nextIndex > len(rf.logs) {
-				nextIndex = len(rf.logs)
+			if nextIndex > rf.lastLogIndex()+1 {
+				nextIndex = rf.lastLogIndex() + 1
 			}
 			prevLogIndex := nextIndex - 1
 			args := &AppendEntriesArgs{
 				Term:         rf.currentTerm,
 				LeaderId:     rf.me,
 				PrevLogIndex: prevLogIndex,
-				PrevLogTerm:  rf.logs[prevLogIndex].Term,
+				PrevLogTerm:  rf.logAt(prevLogIndex).Term,
 				Entries:      entries,
 				LeaderCommit: rf.commitIndex,
 			}
@@ -163,8 +169,8 @@ func (rf *Raft) startAppendEntries() {
 							rf.matchIndex[peerIndex] = matchIndex
 							rf.nextIndex[peerIndex] = matchIndex + 1
 							// find an index n (if any), to update leader's commitIndex
-							for n := len(rf.logs) - 1; n > rf.commitIndex; n-- {
-								if rf.logs[n].Term != rf.currentTerm {
+							for n := rf.lastLogIndex(); n > rf.commitIndex && n > rf.snapshotLastIndex; n-- {
+								if rf.logAt(n).Term != rf.currentTerm {
 									continue
 								}
 								// the entry has replicated to leader itself
@@ -186,11 +192,11 @@ func (rf *Raft) startAppendEntries() {
 								rf.nextIndex[peerIndex] = reply.ConflictIndex
 							} else {
 								foundNextIndex := false
-								for i := len(rf.logs) - 1; i > 0; i-- {
-									if rf.logs[i].Term < reply.ConflictTerm {
+								for i := rf.lastLogIndex(); i > rf.snapshotLastIndex; i-- {
+									if rf.logAt(i).Term < reply.ConflictTerm {
 										break
 									}
-									if rf.logs[i].Term == reply.ConflictTerm {
+									if rf.logAt(i).Term == reply.ConflictTerm {
 										rf.nextIndex[peerIndex] = i + 1
 										foundNextIndex = true
 										break
@@ -240,11 +246,11 @@ func (rf *Raft) applier() {
 
 	for !rf.killed() {
 		// all server rule 1
-		if rf.commitIndex > rf.lastApplied && len(rf.logs)-1 > rf.lastApplied {
+		if rf.commitIndex > rf.lastApplied && rf.lastLogIndex() > rf.lastApplied {
 			rf.lastApplied++
 			applyMsg := ApplyMsg{
 				CommandValid: true,
-				Command:      rf.logs[rf.lastApplied].Command,
+				Command:      rf.logAt(rf.lastApplied).Command,
 				CommandIndex: rf.lastApplied,
 			}
 			rf.mu.Unlock()

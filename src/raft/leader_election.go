@@ -62,8 +62,8 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	// #2
 	if rf.votedFor == -1 || rf.votedFor == args.CandidateId {
 		// compare whose log is up-to-date;
-		if args.LastLogTerm > rf.logs[len(rf.logs)-1].Term ||
-			args.LastLogTerm == rf.logs[len(rf.logs)-1].Term && args.LastLogIndex >= len(rf.logs)-1 {
+		if args.LastLogTerm > rf.lastLogTerm() ||
+			args.LastLogTerm == rf.lastLogTerm() && args.LastLogIndex >= rf.lastLogIndex() {
 			// grant vote and reset election timer;
 			rf.votedFor = args.CandidateId
 			reply.VoteGranted = true
@@ -125,8 +125,8 @@ func (rf *Raft) startElection() {
 			args := &RequestVoteArgs{
 				Term:         rf.currentTerm,
 				CandidateId:  rf.me,
-				LastLogIndex: len(rf.logs) - 1,
-				LastLogTerm:  rf.logs[len(rf.logs)-1].Term,
+				LastLogIndex: rf.lastLogIndex(),
+				LastLogTerm:  rf.lastLogTerm(),
 			}
 			rf.mu.Unlock()
 			reply := &RequestVoteReply{}

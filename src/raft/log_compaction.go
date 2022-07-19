@@ -72,7 +72,8 @@ func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapsho
 		rf.snapshotLastIndex = args.LastIncludedIndex
 		rf.snapshotLastTerm = args.LastIncludedTerm
 		rf.snapshot = args.Data
-		rf.logs = rf.logs[trimIndex:]
+		rf.persister.SaveStateAndSnapshot(rf.persist(), args.Data)
+		rf.logs = append([]LogEntry{{0, 0}}, rf.logsFrom(trimIndex+args.LastIncludedIndex)...)
 
 		// send snapshot to service, it will apply the snapshot.
 		snapshotMsg := ApplyMsg{
@@ -146,14 +147,15 @@ func (rf *Raft) Snapshot(index int, snapshot []byte) {
 	defer rf.mu.Unlock()
 
 	// already in the latest snapshot || snapshot contains uncommitted entry index
-	if index < rf.snapshotLastIndex || rf.commitIndex < index {
+	if index <= rf.snapshotLastIndex || rf.commitIndex < index {
 		return
 	}
 
+	rf.logs = append([]LogEntry{{0, 0}}, rf.logsFrom(index+1)...)
 	rf.snapshotLastIndex = index
-	rf.snapshotLastTerm = rf.logs[index].Term
-	rf.logs = append([]LogEntry{{0, 0}}, rf.logs[index-rf.snapshotLastIndex+1:]...)
+	rf.snapshotLastTerm = rf.logAt(index).Term
 	rf.snapshot = snapshot
+	rf.persister.SaveStateAndSnapshot(rf.persist(), snapshot)
 }
 
 // CondInstallSnapshot

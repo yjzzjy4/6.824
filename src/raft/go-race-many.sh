@@ -52,21 +52,38 @@ test=''
 clear_dir=false
 race=false
 
+function argumentError() {
+  if $1; then
+    echo "$0: Invalid value for argument: $2"
+  else
+    echo "$0: Invalid option -- '$2'"
+  fi
+  echo "Try '$0 -h' or '$0 --help' for more information."
+  exit 1
+}
+
 while [[ $# -gt 0 ]]; do
   case $1 in
   -r | --rounds)
     if [[ $2 =~ ^[1-9][0-9]*$ ]]; then
       rounds=$2
+      shift 2
+    else
+      argumentError true "$1"
     fi
-    shift 2
     ;;
   -p | --processes)
     if [[ $2 =~ ^[1-9][0-9]*$ ]]; then
       processes=$2
+      shift 2
+    else
+      argumentError true "$1"
     fi
-    shift 2
     ;;
   -t | --test-pattern)
+    if [[ $# -eq 1 ]]; then
+      argumentError true "$1"
+    fi
     test=$2
     shift 2
     ;;
@@ -87,12 +104,9 @@ while [[ $# -gt 0 ]]; do
     echo "$0 -r 100 -p #cpus -t ''"
     exit 0
     ;;
-  -*)
-    echo "$0: Invalid option -- '$1'"
-    echo "Try '$0 -h' or '$0 --help' for more information."
-    exit 1
+  *)
+    argumentError false "$1"
     ;;
-  *) ;;
   esac
 done
 

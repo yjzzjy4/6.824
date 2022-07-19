@@ -38,6 +38,6 @@ func (rf *Raft) toLeader() {
 
 	for i := range rf.peers {
 		rf.matchIndex[i] = 0
-		rf.nextIndex[i] = rf.snapshotLastIndex + len(rf.logs)
+		rf.nextIndex[i] = rf.lastLogIndex() + 1
 	}
 }

@@ -116,7 +116,7 @@ func (rf *Raft) GetState() (int, bool) {
 // where it can later be retrieved after a crash and restart.
 // see paper's Figure 2 for a description of what should be persistent.
 //
-func (rf *Raft) persist() {
+func (rf *Raft) persist() []byte {
 	// Your code here (2C).
 	// Example:
 	w := new(bytes.Buffer)
@@ -124,10 +124,11 @@ func (rf *Raft) persist() {
 	e.Encode(rf.currentTerm)
 	e.Encode(rf.votedFor)
 	e.Encode(rf.logs)
-	//e.Encode(rf.snapshotLastIndex)
-	//e.Encode(rf.snapshotLastTerm)
+	e.Encode(rf.snapshotLastIndex)
+	e.Encode(rf.snapshotLastTerm)
 	data := w.Bytes()
 	rf.persister.SaveRaftState(data)
+	return data
 }
 
 //
@@ -143,16 +144,22 @@ func (rf *Raft) readPersist(data []byte) {
 	d := labgob.NewDecoder(r)
 	var currentTerm int
 	var votedFor int
+	var snapshotLastIndex int
+	var snapshotLastTerm int
 	var logs []LogEntry
 	if d.Decode(&currentTerm) != nil ||
 		d.Decode(&votedFor) != nil ||
-		d.Decode(&logs) != nil {
+		d.Decode(&logs) != nil ||
+		d.Decode(&snapshotLastIndex) != nil ||
+		d.Decode(&snapshotLastTerm) != nil {
 		// decode error...
 		log.Fatal("failed to read persisted data\n")
 	} else {
 		rf.currentTerm = currentTerm
 		rf.votedFor = votedFor
 		rf.logs = logs
+		rf.snapshotLastIndex = snapshotLastIndex
+		rf.snapshotLastTerm = snapshotLastTerm
 	}
 }
 
