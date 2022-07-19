@@ -56,24 +56,33 @@ func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapsho
 				args.LastIncludedTerm <= rf.snapshotLastTerm {
 			return
 		}
-		trimIndex := 0
+
+		truncateIndex := 0
 		for index, entry := range rf.logs {
 			// existing log entry that has the same index and term as snapshot’s last included entry
 			if args.LastIncludedIndex == rf.snapshotLastIndex+index &&
 				args.LastIncludedTerm == entry.Term {
-				trimIndex = index + 1
+				truncateIndex = args.LastIncludedIndex + index + 1
 				break
 			}
 			if index == len(rf.logs)-1 {
-				trimIndex = index + 1
+				truncateIndex = args.LastIncludedIndex + 1
 			}
 		}
-		// trim server's logs
+		// truncate server's logs
 		rf.snapshotLastIndex = args.LastIncludedIndex
 		rf.snapshotLastTerm = args.LastIncludedTerm
 		rf.snapshot = args.Data
-		rf.persister.SaveStateAndSnapshot(rf.persist(), args.Data)
-		rf.logs = append([]LogEntry{{0, 0}}, rf.logsFrom(trimIndex+args.LastIncludedIndex)...)
+		rf.logs = append([]LogEntry{{0, 0}}, rf.logsFrom(truncateIndex)...)
+		rf.persister.SaveStateAndSnapshot(rf.encodeState(), args.Data)
+
+		// update commitIndex and lastApplied so that server won't trigger apply error
+		if args.LastIncludedIndex > rf.commitIndex {
+			rf.commitIndex = args.LastIncludedIndex
+		}
+		if args.LastIncludedIndex > rf.lastApplied {
+			rf.lastApplied = args.LastIncludedIndex
+		}
 
 		// send snapshot to service, it will apply the snapshot.
 		snapshotMsg := ApplyMsg{
@@ -151,11 +160,19 @@ func (rf *Raft) Snapshot(index int, snapshot []byte) {
 		return
 	}
 
-	rf.logs = append([]LogEntry{{0, 0}}, rf.logsFrom(index+1)...)
 	rf.snapshotLastIndex = index
 	rf.snapshotLastTerm = rf.logAt(index).Term
 	rf.snapshot = snapshot
-	rf.persister.SaveStateAndSnapshot(rf.persist(), snapshot)
+	rf.logs = append([]LogEntry{{0, 0}}, rf.logsFrom(index+1)...)
+	rf.persister.SaveStateAndSnapshot(rf.encodeState(), snapshot)
+
+	// update commitIndex and lastApplied so that server won't trigger apply error
+	if index > rf.commitIndex {
+		rf.commitIndex = index
+	}
+	if index > rf.lastApplied {
+		rf.lastApplied = index
+	}
 }
 
 // CondInstallSnapshot

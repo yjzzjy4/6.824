@@ -111,14 +111,7 @@ func (rf *Raft) GetState() (int, bool) {
 	return rf.currentTerm, rf.state == LEADER
 }
 
-//
-// save Raft's persistent state to stable storage,
-// where it can later be retrieved after a crash and restart.
-// see paper's Figure 2 for a description of what should be persistent.
-//
-func (rf *Raft) persist() []byte {
-	// Your code here (2C).
-	// Example:
+func (rf *Raft) encodeState() []byte {
 	w := new(bytes.Buffer)
 	e := labgob.NewEncoder(w)
 	e.Encode(rf.currentTerm)
@@ -126,9 +119,17 @@ func (rf *Raft) persist() []byte {
 	e.Encode(rf.logs)
 	e.Encode(rf.snapshotLastIndex)
 	e.Encode(rf.snapshotLastTerm)
-	data := w.Bytes()
-	rf.persister.SaveRaftState(data)
-	return data
+	return w.Bytes()
+}
+
+//
+// save Raft's persistent state to stable storage,
+// where it can later be retrieved after a crash and restart.
+// see paper's Figure 2 for a description of what should be persistent.
+//
+func (rf *Raft) persist() {
+	// Your code here (2C).
+	rf.persister.SaveRaftState(rf.encodeState())
 }
 
 //
