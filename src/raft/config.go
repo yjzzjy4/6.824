@@ -110,6 +110,8 @@ func (cfg *config) crash1(i int) {
 	cfg.disconnect(i)
 	cfg.net.DeleteServer(i) // disable client connections to the server.
 
+	fmt.Printf("Crashed(%d)\n", i)
+
 	cfg.mu.Lock()
 	defer cfg.mu.Unlock()
 
@@ -331,6 +333,7 @@ func (cfg *config) start1(i int, applier func(int, chan ApplyMsg)) {
 	srv := labrpc.MakeServer()
 	srv.AddService(svc)
 	cfg.net.AddServer(i, srv)
+	fmt.Printf("Start1(%d)\n", i)
 }
 
 func (cfg *config) checkTimeout() {
@@ -358,7 +361,7 @@ func (cfg *config) cleanup() {
 
 // attach server i to the net.
 func (cfg *config) connect(i int) {
-	//fmt.Printf("connect(%d), ", i)
+	fmt.Printf("connect(%d)\n", i)
 
 	cfg.connected[i] = true
 
@@ -381,7 +384,7 @@ func (cfg *config) connect(i int) {
 
 // detach server i from the net.
 func (cfg *config) disconnect(i int) {
-	//fmt.Printf("disconnect(%d), ", i)
+	fmt.Printf("disconnect(%d)\n", i)
 
 	cfg.connected[i] = false
 

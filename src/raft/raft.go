@@ -17,10 +17,6 @@ package raft
 //   in the same server.
 //
 import (
-	"6.824/labgob"
-	"bytes"
-	"log"
-
 	//	"bytes"
 	"sync"
 	"sync/atomic"
@@ -111,59 +107,6 @@ func (rf *Raft) GetState() (int, bool) {
 	return rf.currentTerm, rf.state == LEADER
 }
 
-func (rf *Raft) encodeState() []byte {
-	w := new(bytes.Buffer)
-	e := labgob.NewEncoder(w)
-	e.Encode(rf.currentTerm)
-	e.Encode(rf.votedFor)
-	e.Encode(rf.logs)
-	e.Encode(rf.snapshotLastIndex)
-	e.Encode(rf.snapshotLastTerm)
-	return w.Bytes()
-}
-
-//
-// save Raft's persistent state to stable storage,
-// where it can later be retrieved after a crash and restart.
-// see paper's Figure 2 for a description of what should be persistent.
-//
-func (rf *Raft) persist() {
-	// Your code here (2C).
-	rf.persister.SaveRaftState(rf.encodeState())
-}
-
-//
-// restore previously persisted state.
-//
-func (rf *Raft) readPersist(data []byte) {
-	if data == nil || len(data) < 1 { // bootstrap without any state?
-		return
-	}
-	// Your code here (2C).
-	// Example:
-	r := bytes.NewBuffer(data)
-	d := labgob.NewDecoder(r)
-	var currentTerm int
-	var votedFor int
-	var snapshotLastIndex int
-	var snapshotLastTerm int
-	var logs []LogEntry
-	if d.Decode(&currentTerm) != nil ||
-		d.Decode(&votedFor) != nil ||
-		d.Decode(&logs) != nil ||
-		d.Decode(&snapshotLastIndex) != nil ||
-		d.Decode(&snapshotLastTerm) != nil {
-		// decode error...
-		log.Fatal("failed to read persisted data\n")
-	} else {
-		rf.currentTerm = currentTerm
-		rf.votedFor = votedFor
-		rf.logs = logs
-		rf.snapshotLastIndex = snapshotLastIndex
-		rf.snapshotLastTerm = snapshotLastTerm
-	}
-}
-
 // Start
 // the service using Raft (e.g. a k/v server) wants to start
 // agreement on the next command to be appended to Raft's log. if this
@@ -192,7 +135,7 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 
 	rf.persist()
 
-	return len(rf.logs) - 1, rf.currentTerm, true
+	return rf.lastLogIndex(), rf.currentTerm, true
 }
 
 // Kill

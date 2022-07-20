@@ -1,6 +1,7 @@
 package raft
 
 import (
+	"fmt"
 	"time"
 )
 
@@ -55,6 +56,12 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	reply.ConflictTerm = -1
 	reply.Success = false
 
+	// snapshot already contains (maybe partial) logs from this RPC.
+	if args.PrevLogIndex < rf.snapshotLastIndex {
+		reply.ConflictIndex = rf.lastLogIndex() + 1
+		return
+	}
+
 	// #2: follower does not have prevLogIndex in its log
 	if rf.lastLogIndex() < args.PrevLogIndex {
 		reply.ConflictIndex = rf.lastLogIndex() + 1
@@ -70,12 +77,6 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 				break
 			}
 		}
-		return
-	}
-
-	// snapshot already contains (partial) logs from this RPC.
-	if args.PrevLogIndex < rf.snapshotLastIndex {
-		reply.ConflictIndex = rf.snapshotLastIndex
 		return
 	}
 
@@ -249,12 +250,15 @@ func (rf *Raft) applier() {
 		if rf.commitIndex > rf.lastApplied && rf.lastLogIndex() > rf.lastApplied {
 			rf.lastApplied++
 			applyMsg := ApplyMsg{
-				CommandValid: true,
-				Command:      rf.logAt(rf.lastApplied).Command,
-				CommandIndex: rf.lastApplied,
+				SnapshotValid: false,
+				CommandValid:  true,
+				Command:       rf.logAt(rf.lastApplied).Command,
+				CommandIndex:  rf.lastApplied,
 			}
+			server, state := rf.me, rf.state
 			rf.mu.Unlock()
 			rf.applyMsgCh <- applyMsg
+			fmt.Printf("%d is leader: %v, has applied at index: %d, with command: %v\n", server, state == LEADER, applyMsg.CommandIndex, applyMsg.Command)
 			rf.mu.Lock()
 		} else {
 			rf.applyCond.Wait()

@@ -1,5 +1,7 @@
 package raft
 
+import "fmt"
+
 type InstallSnapshotArgs struct {
 	Term              int
 	LeaderId          int
@@ -57,6 +59,9 @@ func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapsho
 			return
 		}
 
+		fmt.Printf("Leader: %d has sent %d a valid snapshot, in which the lastIncludedIndex is: %d\n", args.LeaderId, rf.me, args.LastIncludedIndex)
+		fmt.Printf("%d's original snapshotLastIndex is: %d, logs are: %v\n", rf.me, rf.snapshotLastIndex, rf.logs)
+
 		truncateIndex := 0
 		for index, entry := range rf.logs {
 			// existing log entry that has the same index and term as snapshot’s last included entry
@@ -66,15 +71,16 @@ func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapsho
 				break
 			}
 			if index == len(rf.logs)-1 {
-				truncateIndex = args.LastIncludedIndex + 1
+				truncateIndex = rf.lastLogIndex() + 1
 			}
 		}
 		// truncate server's logs
+		rf.logs = append([]LogEntry{{0, 0}}, rf.logsFrom(truncateIndex)...)
 		rf.snapshotLastIndex = args.LastIncludedIndex
 		rf.snapshotLastTerm = args.LastIncludedTerm
 		rf.snapshot = args.Data
-		rf.logs = append([]LogEntry{{0, 0}}, rf.logsFrom(truncateIndex)...)
-		rf.persister.SaveStateAndSnapshot(rf.encodeState(), args.Data)
+		fmt.Printf("%d has truncated its logs, now snapshotLastIndex is: %d, logs are: %v\n", rf.me, rf.snapshotLastIndex, rf.logs)
+		rf.persistWithSnapshot(args.Data)
 
 		// update commitIndex and lastApplied so that server won't trigger apply error
 		if args.LastIncludedIndex > rf.commitIndex {
@@ -160,16 +166,17 @@ func (rf *Raft) Snapshot(index int, snapshot []byte) {
 		return
 	}
 
+	fmt.Printf("Before %d taking snapshot, snapshotLastIndex: %d, snapshotLastTerm: %d, logs: %v: \n", rf.me, rf.snapshotLastIndex, rf.snapshotLastTerm, rf.logs)
+
+	rf.logs = append([]LogEntry{{0, 0}}, rf.logsFrom(index+1)...)
 	rf.snapshotLastIndex = index
 	rf.snapshotLastTerm = rf.logAt(index).Term
 	rf.snapshot = snapshot
-	rf.logs = append([]LogEntry{{0, 0}}, rf.logsFrom(index+1)...)
-	rf.persister.SaveStateAndSnapshot(rf.encodeState(), snapshot)
+	rf.persistWithSnapshot(snapshot)
+
+	fmt.Printf("After %d taking snapshot, snapshotLastIndex: %d, snapshotLastTerm: %d, logs: %v: \n", rf.me, rf.snapshotLastIndex, rf.snapshotLastTerm, rf.logs)
 
 	// update commitIndex and lastApplied so that server won't trigger apply error
-	if index > rf.commitIndex {
-		rf.commitIndex = index
-	}
 	if index > rf.lastApplied {
 		rf.lastApplied = index
 	}
