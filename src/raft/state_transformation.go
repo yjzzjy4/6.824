@@ -35,6 +35,7 @@ func (rf *Raft) toCandidate() {
 func (rf *Raft) toLeader() {
 	rf.state = LEADER
 	rf.leaderId = rf.me
+	//fmt.Printf("%d has become leader\n", rf.me)
 
 	for i := range rf.peers {
 		rf.matchIndex[i] = 0

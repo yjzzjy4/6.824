@@ -3,7 +3,6 @@ package raft
 import (
 	"6.824/labgob"
 	"bytes"
-	"fmt"
 	"log"
 )
 
@@ -102,12 +101,20 @@ func (rf *Raft) lastLogIndex() int {
 }
 
 func (rf *Raft) actualIndex(index int) int {
-	fmt.Printf("server: %d, index: %d, snapshotLastIndex: %d\n", rf.me, index, rf.snapshotLastIndex)
+	//fmt.Printf("server: %d, index: %d, snapshotLastIndex: %d\n", rf.me, index, rf.snapshotLastIndex)
 	return index - rf.snapshotLastIndex
 }
 
 func (rf *Raft) logAt(index int) LogEntry {
 	return rf.logs[rf.actualIndex(index)]
+}
+
+func (rf *Raft) termAt(index int) int {
+	i := rf.actualIndex(index)
+	if i == 0 {
+		return rf.snapshotLastTerm
+	}
+	return rf.logs[i].Term
 }
 
 // log slice operation: [begin, end of the logs].

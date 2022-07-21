@@ -1,7 +1,6 @@
 package raft
 
 import (
-	"fmt"
 	"time"
 )
 
@@ -69,10 +68,10 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	}
 
 	// #2: follower does have prevLogIndex in its log, but the term does not match
-	if rf.logAt(args.PrevLogIndex).Term != args.PrevLogTerm {
-		reply.ConflictTerm = rf.logAt(args.PrevLogIndex).Term
+	if rf.termAt(args.PrevLogIndex) != args.PrevLogTerm {
+		reply.ConflictTerm = rf.termAt(args.PrevLogIndex)
 		for i := args.PrevLogIndex - 1; i >= rf.snapshotLastIndex; i-- {
-			if rf.logAt(i).Term != reply.ConflictTerm {
+			if rf.termAt(i) != reply.ConflictTerm {
 				reply.ConflictIndex = i + 1
 				break
 			}
@@ -86,7 +85,7 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	for i, entry := range args.Entries {
 		entryIndex := i + args.PrevLogIndex + 1
 		// #3, conflict occurs, truncate peer's logs
-		if entryIndex <= rf.lastLogIndex() && rf.logAt(entryIndex).Term != entry.Term {
+		if entryIndex <= rf.lastLogIndex() && rf.termAt(entryIndex) != entry.Term {
 			rf.logs = rf.logsTo(entryIndex - 1)
 			rf.persist()
 		}
@@ -143,7 +142,7 @@ func (rf *Raft) startAppendEntries() {
 				Term:         rf.currentTerm,
 				LeaderId:     rf.me,
 				PrevLogIndex: prevLogIndex,
-				PrevLogTerm:  rf.logAt(prevLogIndex).Term,
+				PrevLogTerm:  rf.termAt(prevLogIndex),
 				Entries:      entries,
 				LeaderCommit: rf.commitIndex,
 			}
@@ -171,7 +170,7 @@ func (rf *Raft) startAppendEntries() {
 							rf.nextIndex[peerIndex] = matchIndex + 1
 							// find an index n (if any), to update leader's commitIndex
 							for n := rf.lastLogIndex(); n > rf.commitIndex && n > rf.snapshotLastIndex; n-- {
-								if rf.logAt(n).Term != rf.currentTerm {
+								if rf.termAt(n) != rf.currentTerm {
 									continue
 								}
 								// the entry has replicated to leader itself
@@ -194,10 +193,10 @@ func (rf *Raft) startAppendEntries() {
 							} else {
 								foundNextIndex := false
 								for i := rf.lastLogIndex(); i > rf.snapshotLastIndex; i-- {
-									if rf.logAt(i).Term < reply.ConflictTerm {
+									if rf.termAt(i) < reply.ConflictTerm {
 										break
 									}
-									if rf.logAt(i).Term == reply.ConflictTerm {
+									if rf.termAt(i) == reply.ConflictTerm {
 										rf.nextIndex[peerIndex] = i + 1
 										foundNextIndex = true
 										break
@@ -207,6 +206,7 @@ func (rf *Raft) startAppendEntries() {
 									rf.nextIndex[peerIndex] = reply.ConflictIndex
 								}
 							}
+							//fmt.Printf("%d has detected a conflict for peer: %d, at index: %d, and term: %d, nextIndex: %d\n", rf.me, peerIndex, reply.ConflictIndex, reply.ConflictTerm, rf.nextIndex[peerIndex])
 							// leader sends its snapshot to a stale follower
 							if rf.nextIndex[peerIndex] <= rf.snapshotLastIndex {
 								go rf.startInstallSnapshot(peerIndex)
@@ -255,10 +255,10 @@ func (rf *Raft) applier() {
 				Command:       rf.logAt(rf.lastApplied).Command,
 				CommandIndex:  rf.lastApplied,
 			}
-			server, state := rf.me, rf.state
+			//server, state := rf.me, rf.state
 			rf.mu.Unlock()
 			rf.applyMsgCh <- applyMsg
-			fmt.Printf("%d is leader: %v, has applied at index: %d, with command: %v\n", server, state == LEADER, applyMsg.CommandIndex, applyMsg.Command)
+			//fmt.Printf("%d is leader: %v, has applied at index: %d, with command: %v\n", server, state == LEADER, applyMsg.CommandIndex, applyMsg.Command)
 			rf.mu.Lock()
 		} else {
 			rf.applyCond.Wait()

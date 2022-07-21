@@ -22,7 +22,7 @@ This document is for recording some problems or hints the author have met or con
 
 ## Part 2A
 
-Not many tricky problems, but some hints:
+### hints:
 
 0. Do not reset leader's `votedFor` field right after it becomes leader, actually, do not do that ever as a leader;
 1. Heartbeat time should be greater than 100 ms, as the tester limits 10 heartbeats / sec;
@@ -159,3 +159,82 @@ You might choose the latter group of arguments to meet the requirements.
 
 ### Part 2D
 
+### hints:
+
+Since we would modify our code a lot in 2D, it is highly suggested that you encapsulate some useful tool functions for raft, such as `lastLogTerm()`, `lastLogIndex()`, `termAt(index int)`, `logAt(index int)`, etc.
+
+Then, use these functions to refactor your previous code, before you started 2D, make sure the refactored version passes the tests before.
+
+This approach can ensure that there are no subtle problems in your code, making it easier to proceed and debug for 2D.
+
+### failed to reach agreement
+
+#### Cause for 'failed to reach agreement'
+
+One situation I discovered for causing the problem is that a disconnected leader comes back up, though he is disconnected too long to come back as a leader, others still voted for him, leading to a outdated leader scenario. Usually this happens when there are bugs in your code related to leader election.
+
+#### Solution for 'failed to reach agreement'
+
+Later I found that this is a problem related to `lastLogTerm` and truncate logs. When a server received a snapshot from the tester, if it is not outdated, then the server accepts it and truncates its logs, here is my original implementation at first:
+
+```go
+rf.logs = append([]LogEntry{{0, 0}}, rf.logsFrom(index+1)...)
+rf.snapshotLastIndex = index
+rf.snapshotLastTerm = rf.termAt(index)
+```
+
+As we can see, the code above truncates logs before updating `snapshotLastTerm`, due to missing log entry at index, the `snapshotLastTerm` is always 0 (default value), or even worse, this could leads to an out of index error (because the logs are truncated, it could be not long enough).
+
+So the correct approach is to introduce a temporary variable to save the states we need before it is overwritten, like this:
+
+```go
+lastLogTerm := rf.termAt(index)
+rf.logs = append([]LogEntry{{0, 0}}, rf.logsFrom(index+1)...)
+rf.snapshotLastIndex = index
+rf.snapshotLastTerm = lastLogTerm
+```
+
+Or we can manage the order of statements so that it won't cause the problem:
+
+```go
+rf.snapshotLastTerm = rf.termAt(index)
+rf.logs = append([]LogEntry{{0, 0}}, rf.logsFrom(index+1)...)
+rf.snapshotLastIndex = index
+```
+
+Why can't we update `snapshotLastIndex` before truncating logs ? Because the `logsFrom(index)` implementation depends on it:
+
+```go
+func (rf *Raft) logsFrom(begin int) []LogEntry {
+	return rf.logs[rf.actualIndex(begin-rf.snapshotLastIndex):]
+}
+```
+
+Moreover, after we introduce the log compaction machanism, there will be plenty of issues like this. For example, if you want to retrieve a log entry specific index, you can't just do `rf.logs[index]`, it needs to be transformed to the "real" index, use a tool functions like below:
+
+```go
+func (rf *Raft) actualIndex(index int) int {
+	return index - rf.snapshotLastIndex
+}
+```
+
+The same for `lastLogTerm()` and `lastLogIndex()`:
+
+```go
+func (rf *Raft) lastLogTerm() int {
+	if len(rf.logs) == 1 {
+		return rf.snapshotLastTerm
+	}
+	return rf.logs[len(rf.logs)-1].Term
+}
+
+func (rf *Raft) lastLogIndex() int {
+	return rf.snapshotLastIndex + len(rf.logs) - 1
+}
+```
+
+You will have to pay extra attentions to these dependencies, the transformations between those states could affect your previous code, leading to tiny, but annoying bugs. So always be careful with your statement orders.
+
+### apply error
+
+#### Cause for 'apply error'
