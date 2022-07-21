@@ -101,7 +101,6 @@ func (rf *Raft) lastLogIndex() int {
 }
 
 func (rf *Raft) actualIndex(index int) int {
-	//fmt.Printf("server: %d, index: %d, snapshotLastIndex: %d\n", rf.me, index, rf.snapshotLastIndex)
 	return index - rf.snapshotLastIndex
 }
 

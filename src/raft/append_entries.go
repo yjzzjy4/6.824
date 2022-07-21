@@ -206,7 +206,7 @@ func (rf *Raft) startAppendEntries() {
 									rf.nextIndex[peerIndex] = reply.ConflictIndex
 								}
 							}
-							//fmt.Printf("%d has detected a conflict for peer: %d, at index: %d, and term: %d, nextIndex: %d\n", rf.me, peerIndex, reply.ConflictIndex, reply.ConflictTerm, rf.nextIndex[peerIndex])
+
 							// leader sends its snapshot to a stale follower
 							if rf.nextIndex[peerIndex] <= rf.snapshotLastIndex {
 								go rf.startInstallSnapshot(peerIndex)
@@ -258,7 +258,6 @@ func (rf *Raft) applier() {
 			//server, state := rf.me, rf.state
 			rf.mu.Unlock()
 			rf.applyMsgCh <- applyMsg
-			//fmt.Printf("%d is leader: %v, has applied at index: %d, with command: %v\n", server, state == LEADER, applyMsg.CommandIndex, applyMsg.Command)
 			rf.mu.Lock()
 		} else {
 			rf.applyCond.Wait()

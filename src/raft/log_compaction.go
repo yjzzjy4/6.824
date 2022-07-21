@@ -57,9 +57,6 @@ func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapsho
 			return
 		}
 
-		//fmt.Printf("Leader: %d has sent %d a valid snapshot, in which the lastIncludedIndex is: %d\n", args.LeaderId, rf.me, args.LastIncludedIndex)
-		//fmt.Printf("%d's original snapshotLastIndex is: %d, logs are: %v\n", rf.me, rf.snapshotLastIndex, rf.logs)
-
 		truncateIndex := 0
 		for index, entry := range rf.logs {
 			// existing log entry that has the same index and term as snapshot’s last included entry
@@ -72,13 +69,12 @@ func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapsho
 				truncateIndex = rf.lastLogIndex() + 1
 			}
 		}
-		//fmt.Printf("%d is going to truncate at: %d\n", rf.me, truncateIndex)
+
 		// truncate server's logs
 		rf.logs = append([]LogEntry{{0, 0}}, rf.logsFrom(truncateIndex)...)
 		rf.snapshotLastIndex = args.LastIncludedIndex
 		rf.snapshotLastTerm = args.LastIncludedTerm
 		rf.snapshot = args.Data
-		//fmt.Printf("%d has truncated its logs, now snapshotLastIndex is: %d, logs are: %v\n", rf.me, rf.snapshotLastIndex, rf.logs)
 		rf.persistWithSnapshot(args.Data)
 
 		// update commitIndex and lastApplied so that server won't trigger apply error
@@ -165,15 +161,11 @@ func (rf *Raft) Snapshot(index int, snapshot []byte) {
 		return
 	}
 
-	//fmt.Printf("Before %d taking snapshot, snapshotLastIndex: %d, snapshotLastTerm: %d, index: %d, logs: %v: \n", rf.me, rf.snapshotLastIndex, rf.snapshotLastTerm, index, rf.logs)
-
 	rf.snapshotLastTerm = rf.termAt(index)
 	rf.logs = append([]LogEntry{{0, 0}}, rf.logsFrom(index+1)...)
 	rf.snapshotLastIndex = index
 	rf.snapshot = snapshot
 	rf.persistWithSnapshot(snapshot)
-
-	//fmt.Printf("After %d taking snapshot, snapshotLastIndex: %d, snapshotLastTerm: %d, logs: %v: \n", rf.me, rf.snapshotLastIndex, rf.snapshotLastTerm, rf.logs)
 
 	// update commitIndex and lastApplied so that server won't trigger apply error
 	if index > rf.commitIndex {

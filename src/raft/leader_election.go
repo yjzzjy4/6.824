@@ -67,7 +67,6 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 			// grant vote and reset election timer;
 			rf.votedFor = args.CandidateId
 			reply.VoteGranted = true
-			//fmt.Printf("%d, lastLogTerm: %d, lastLogIndex: %d, has voted for %d, candidate lastLogTerm: %d, candidate lastLogIndex: %d\n", rf.me, rf.lastLogTerm(), rf.lastLogIndex(), args.CandidateId, args.LastLogTerm, args.LastLogIndex)
 			rf.persist()
 			rf.resetElectionTimer()
 		}

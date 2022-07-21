@@ -110,8 +110,6 @@ func (cfg *config) crash1(i int) {
 	cfg.disconnect(i)
 	cfg.net.DeleteServer(i) // disable client connections to the server.
 
-	//fmt.Printf("Crashed(%d)\n", i)
-
 	cfg.mu.Lock()
 	defer cfg.mu.Unlock()
 
@@ -333,7 +331,6 @@ func (cfg *config) start1(i int, applier func(int, chan ApplyMsg)) {
 	srv := labrpc.MakeServer()
 	srv.AddService(svc)
 	cfg.net.AddServer(i, srv)
-	//fmt.Printf("Start1(%d)\n", i)
 }
 
 func (cfg *config) checkTimeout() {
