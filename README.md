@@ -202,7 +202,7 @@ rf.logs = append([]LogEntry{{0, 0}}, rf.logsFrom(index+1)...)
 rf.snapshotLastIndex = index
 ```
 
-Why can't we update `snapshotLastIndex` before truncating logs ? Because the `logsFrom(index)` implementation depends on it:
+Why can't we update `snapshotLastIndex` before truncating logs ? Because the `logsFrom(index)` implementation depends on it:
 
 ```go
 func (rf *Raft) logsFrom(begin int) []LogEntry {
@@ -210,7 +210,7 @@ func (rf *Raft) logsFrom(begin int) []LogEntry {
 }
 ```
 
-Moreover, after we introduce the log compaction machanism, there will be plenty of issues like this. For example, if you want to retrieve a log entry specific index, you can't just do `rf.logs[index]`, it needs to be transformed to the "real" index, use a tool functions like below:
+Moreover, after we introduce the log compaction machanism, there will be plenty of issues like this. For example, if you want to retrieve a log entry at specific index, you can't just do `rf.logs[index]`, it needs to be transformed to the "real" index, using a tool function like below:
 
 ```go
 func (rf *Raft) actualIndex(index int) int {
@@ -218,7 +218,7 @@ func (rf *Raft) actualIndex(index int) int {
 }
 ```
 
-The same for `lastLogTerm()` and `lastLogIndex()`:
+The same for `lastLogTerm()` and `lastLogIndex()`:
 
 ```go
 func (rf *Raft) lastLogTerm() int {
@@ -235,6 +235,14 @@ func (rf *Raft) lastLogIndex() int {
 
 You will have to pay extra attentions to these dependencies, the transformations between those states could affect your previous code, leading to tiny, but annoying bugs. So always be careful with your statement orders.
 
-### apply error
+### Other problems
 
-#### Cause for 'apply error'
+You might encounter other weird problems, such as 'apply error', 'apply out of order', etc. Before you lose all your patients and screaming out, just check your code to see if you:
+
+0. Use tool functions instead of hard coding everything you need;
+1. Write the correct tool functions, without introducing new glitches, especially in taking care of boundaries;
+2. Persist not only the raft's persistent states, but also with the new added `snapshotLastIndex` and `snapshotLastTerm`, these are critical when your server comes back after a crash;
+3. Persist snapshot along with those states mentioned in 2 whenever you receive and apply a snapshot.
+
+## About test
+
