@@ -6,7 +6,9 @@ import (
 	"log"
 )
 
-// Debug Debugging
+//
+// Debug Debugging.
+//
 const Debug = false
 
 func DPrintf(format string, a ...interface{}) (n int, err error) {
@@ -84,10 +86,12 @@ func (rf *Raft) readPersist(data []byte) {
 	}
 }
 
-// Below are some useful functions for raft peer to call,
+//
+// Below are some useful tool functions for raft peer to call,
 // didn't implement those util 2D, where you should modify
-// your previous codes very often. So to make things simple and
-// easy to understand, I eventually implemented all those tool functions.
+// your previous code very often. So to make things simple and
+// easy to maintain, I eventually implemented all those tool functions.
+//
 
 func (rf *Raft) lastLogTerm() int {
 	if len(rf.logs) == 1 {
@@ -116,21 +120,27 @@ func (rf *Raft) termAt(index int) int {
 	return rf.logs[i].Term
 }
 
+//
 // log slice operation: [begin, end of the logs].
-// begin: int, included
+// begin: int, included.
+//
 func (rf *Raft) logsFrom(begin int) []LogEntry {
 	return rf.logs[rf.actualIndex(begin):]
 }
 
+//
 // log slice operation: [begin of the logs, end].
-// end: int, included
+// end: int, included.
+//
 func (rf *Raft) logsTo(end int) []LogEntry {
 	return rf.logs[:rf.actualIndex(end)+1]
 }
 
+//
 // log slice operation: [begin, end]
-// begin: int, included
-// end: int, included
+// begin: int, included,
+// end: int, included.
+//
 func (rf *Raft) logsBetween(begin, end int) []LogEntry {
 	return rf.logs[rf.actualIndex(begin) : rf.actualIndex(end)+1]
 }

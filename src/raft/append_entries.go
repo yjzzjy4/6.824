@@ -34,7 +34,7 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		return
 	}
 
-	// received a higher Term, change this server to follower
+	// received a higher Term, -> follower
 	if args.Term > rf.currentTerm {
 		rf.toFollower()
 		rf.currentTerm = args.Term
@@ -55,7 +55,7 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	reply.ConflictTerm = -1
 	reply.Success = false
 
-	// snapshot already contains (maybe partial) logs from this RPC.
+	// snapshot already contains (maybe partial) logs from this RPC
 	if args.PrevLogIndex < rf.snapshotLastIndex {
 		reply.ConflictIndex = rf.lastLogIndex() + 1
 		return
@@ -84,7 +84,7 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	// use args.Entries to update this peer's logs
 	for i, entry := range args.Entries {
 		entryIndex := i + args.PrevLogIndex + 1
-		// #3, conflict occurs, truncate peer's logs
+		// #3, conflict occurs, truncate this peer's logs
 		if entryIndex <= rf.lastLogIndex() && rf.termAt(entryIndex) != entry.Term {
 			rf.logs = rf.logsTo(entryIndex - 1)
 			rf.persist()
@@ -109,13 +109,16 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 }
 
 //
-// to send a AppendEntries RPC to a server.
+// To send a AppendEntries RPC to a peer.
 //
 func (rf *Raft) sendAppendEntries(server int, args *AppendEntriesArgs, reply *AppendEntriesReply) bool {
 	ok := rf.peers[server].Call("Raft.AppendEntries", args, reply)
 	return ok
 }
 
+//
+// Leader sends AppendEntries RPCs to others.
+//
 func (rf *Raft) startAppendEntries() {
 	for i := range rf.peers {
 		if i == rf.me {
@@ -161,9 +164,9 @@ func (rf *Raft) startAppendEntries() {
 						rf.currentTerm = reply.Term
 						rf.persist()
 					}
-					// server remains being leader
+					// peer remains leader identity
 					if rf.state == LEADER {
-						// update nextIndex and matchIndex for that peer (follower)
+						// update nextIndex and matchIndex for target peer
 						if reply.Success {
 							matchIndex := args.PrevLogIndex + len(args.Entries)
 							rf.matchIndex[peerIndex] = matchIndex
@@ -207,7 +210,7 @@ func (rf *Raft) startAppendEntries() {
 								}
 							}
 
-							// leader sends its snapshot to a stale follower
+							// leader sends its snapshot to a stale peer
 							if rf.nextIndex[peerIndex] <= rf.snapshotLastIndex {
 								go rf.startInstallSnapshot(peerIndex)
 							}
@@ -219,8 +222,10 @@ func (rf *Raft) startAppendEntries() {
 	}
 }
 
-// The appendEntriesTicker go routine send new entries / heartbeat
-// to follower periodically.
+//
+// The appendEntriesTicker go routine sends
+// new entries / heartbeat to others periodically.
+//
 func (rf *Raft) appendEntriesTicker() {
 	for !rf.killed() {
 
@@ -235,12 +240,16 @@ func (rf *Raft) appendEntriesTicker() {
 	}
 }
 
+//
 // trigger an entry apply.
+//
 func (rf *Raft) apply() {
 	rf.applyCond.Broadcast()
 }
 
+//
 // apply an entry to state machine.
+//
 func (rf *Raft) applier() {
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
@@ -255,7 +264,6 @@ func (rf *Raft) applier() {
 				Command:       rf.logAt(rf.lastApplied).Command,
 				CommandIndex:  rf.lastApplied,
 			}
-			//server, state := rf.me, rf.state
 			rf.mu.Unlock()
 			rf.applyMsgCh <- applyMsg
 			rf.mu.Lock()

@@ -5,6 +5,7 @@ import (
 	"time"
 )
 
+//
 // RequestVoteArgs
 // example RequestVote RPC arguments structure.
 // field names must start with capital letters!
@@ -17,6 +18,7 @@ type RequestVoteArgs struct {
 	LastLogTerm  int
 }
 
+//
 // RequestVoteReply
 // example RequestVote RPC reply structure.
 // field names must start with capital letters!
@@ -49,7 +51,7 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 		return
 	}
 
-	// received a higher Term, change this server to follower
+	// received a higher Term, -> follower
 	if args.Term > rf.currentTerm {
 		rf.toFollower()
 		rf.currentTerm = args.Term
@@ -61,10 +63,10 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 
 	// #2
 	if rf.votedFor == -1 || rf.votedFor == args.CandidateId {
-		// compare whose log is up-to-date;
+		// compare whose log is up-to-date
 		if args.LastLogTerm > rf.lastLogTerm() ||
 			args.LastLogTerm == rf.lastLogTerm() && args.LastLogIndex >= rf.lastLogIndex() {
-			// grant vote and reset election timer;
+			// grant vote and reset election timer
 			rf.votedFor = args.CandidateId
 			reply.VoteGranted = true
 			rf.persist()
@@ -107,7 +109,9 @@ func (rf *Raft) sendRequestVote(server int, args *RequestVoteArgs, reply *Reques
 	return ok
 }
 
-// candidate starts an election.
+//
+// candidate sends RequestVote RPCs to others.
+//
 func (rf *Raft) startElection() {
 	voteCount := 1
 	for i := range rf.peers {
@@ -142,15 +146,15 @@ func (rf *Raft) startElection() {
 						rf.currentTerm = reply.Term
 						rf.persist()
 					}
-					// server are still voting
+					// peer is still voting
 					if rf.state == CANDIDATE {
 						// valid vote
 						if reply.VoteGranted {
 							*voteCount++
-							// server collect majority votes, wins the election
+							// peer collect majority votes, winning the election
 							if *voteCount > len(rf.peers)/2 {
 								rf.toLeader()
-								// send heartbeats to other peers immediately!
+								// send heartbeats to others immediately
 								rf.startAppendEntries()
 							}
 						}
@@ -161,8 +165,10 @@ func (rf *Raft) startElection() {
 	}
 }
 
-// The startElectionTicker go routine starts a new election if this peer hasn't received
-// heartbeats recently.
+//
+// The startElectionTicker go routine starts a new election
+// if this peer hasn't received heartbeats recently.
+//
 func (rf *Raft) startElectionTicker() {
 	for !rf.killed() {
 

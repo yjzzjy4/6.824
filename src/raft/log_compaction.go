@@ -17,7 +17,7 @@ type InstallSnapshotReply struct {
 //
 // InstallSnapshot RPC handler, in this RPC, we don't need to
 // implement snapshot fragments according to lab 2, so just treat any data[]
-// as the complete snapshot sent by leader and ignore the offset (always equals to 0),
+// sent by leader as a complete snapshot and ignore the offset (always equals to 0),
 // the implementation would differ from the raft paper but to meet the requirements by lab 2.
 //
 func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapshotReply) {
@@ -30,7 +30,7 @@ func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapsho
 		return
 	}
 
-	// received a higher Term, change this server to follower
+	// received a higher Term, -> follower
 	if args.Term > rf.currentTerm {
 		rf.toFollower()
 		rf.currentTerm = args.Term
@@ -59,7 +59,7 @@ func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapsho
 
 		truncateIndex := 0
 		for index, entry := range rf.logs {
-			// existing log entry that has the same index and term as snapshot’s last included entry
+			// existing a log entry that has the same index and term as snapshot’s last included entry
 			if args.LastIncludedIndex == rf.snapshotLastIndex+index &&
 				args.LastIncludedTerm == entry.Term {
 				truncateIndex = rf.snapshotLastIndex + index + 1
@@ -70,14 +70,14 @@ func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapsho
 			}
 		}
 
-		// truncate server's logs
+		// truncate peer's logs
 		rf.logs = append([]LogEntry{{0, 0}}, rf.logsFrom(truncateIndex)...)
 		rf.snapshotLastIndex = args.LastIncludedIndex
 		rf.snapshotLastTerm = args.LastIncludedTerm
 		rf.snapshot = args.Data
 		rf.persistWithSnapshot(args.Data)
 
-		// update commitIndex and lastApplied so that server won't trigger apply error
+		// update commitIndex and lastApplied so that peer won't trigger apply error
 		if args.LastIncludedIndex > rf.commitIndex {
 			rf.commitIndex = args.LastIncludedIndex
 		}
@@ -85,7 +85,7 @@ func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapsho
 			rf.lastApplied = args.LastIncludedIndex
 		}
 
-		// send snapshot to service, it will apply the snapshot.
+		// send snapshot to service, who will apply the snapshot
 		snapshotMsg := ApplyMsg{
 			CommandValid:  false,
 			SnapshotValid: true,
@@ -100,13 +100,16 @@ func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapsho
 }
 
 //
-// to send a InstallSnapshot RPC to a server.
+// To send a InstallSnapshot RPC to a peer.
 //
 func (rf *Raft) sendInstallSnapshot(server int, args *InstallSnapshotArgs, reply *InstallSnapshotReply) bool {
 	ok := rf.peers[server].Call("Raft.InstallSnapshot", args, reply)
 	return ok
 }
 
+//
+// Leader sends InstallSnapshot RPCs to others.
+//
 func (rf *Raft) startInstallSnapshot(server int) {
 	rf.mu.Lock()
 	// leader identity validation
@@ -137,7 +140,7 @@ func (rf *Raft) startInstallSnapshot(server int) {
 				rf.currentTerm = reply.Term
 				rf.persist()
 			}
-			// server remains being leader
+			// peer remains leader identity
 			if rf.state == LEADER {
 				rf.matchIndex[server] = args.LastIncludedIndex
 				rf.nextIndex[server] = args.LastIncludedIndex + 1
@@ -146,11 +149,13 @@ func (rf *Raft) startInstallSnapshot(server int) {
 	}
 }
 
+//
 // Snapshot
 // the service says it has created a snapshot that has
 // all info up to and including index. this means the
 // service no longer needs the log through (and including)
 // that index. Raft should now trim its log as much as possible.
+//
 func (rf *Raft) Snapshot(index int, snapshot []byte) {
 	// Your code here (2D).
 	rf.mu.Lock()
@@ -176,6 +181,7 @@ func (rf *Raft) Snapshot(index int, snapshot []byte) {
 	}
 }
 
+//
 // CondInstallSnapshot
 // A service wants to switch to snapshot.  Only do so if Raft hasn't
 // had more recent info since it communicate the snapshot on applyCh.

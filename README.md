@@ -11,7 +11,7 @@ This document is for recording some problems or hints the author have met or con
 
 - Whenever encountered some problem, refer to [Students' Guide to Raft](https://thesquareplanet.com/blog/students-guide-to-raft/#the-importance-of-details) first;
 - Read the tester's code for better understanding of what's going on during the tests;
-- Print logs wherever could lead to a bug, e.g. on term change, around send or receive RPCs, or even inside the tester's code (do not alter the codes that performs the tests, however);
+- Print logs wherever could lead to a bug, e.g. on term change, around send or receive RPCs, or even inside the tester's code (do not alter the code that performs the tests, however);
 - Write down the problems you have encountered, and the solutions accordingly.
 
 ## Afterwards
@@ -22,7 +22,7 @@ This document is for recording some problems or hints the author have met or con
 
 ## Part 2A
 
-### hints:
+### Hints
 
 0. Do not reset leader's `votedFor` field right after it becomes leader, actually, do not do that ever as a leader;
 1. Heartbeat time should be greater than 100 ms, as the tester limits 10 heartbeats / sec;
@@ -42,13 +42,13 @@ This document is for recording some problems or hints the author have met or con
 It's not easy to explain the scenario, one way to reproduce the problem is when a *partitioned leader* went back to the system, received a higher term from RPC reply and adopted it, if he adopted the term before step down to follower, and meanwhile it happens to be the time for him to send `AppendEntries RPC`s to others, it could lead to critical mistakes:
 
 - the reconnected leader is outdated, but he doesn't think so. For he keeps the leader identity, and (probably) with the latest term (due to some server's reply, he adopted a higher term);
-- the others received `AppendEntries RPC` from the outdated leader, *perhaps with higher term than last time*, they're confused, but they would accept this RPC, and **trim their logs and append the outdated leader's if conflict happens**;
-- *the outdated leader wins the election*, and apply entries right after the index when he was disconnected before, this leads to an apply error: same index, different command!
+- the others received `AppendEntries RPC` from the outdated leader, *perhaps with higher term than last time*, they're confused, but they would accept this RPC, then **trim their logs and append the outdated leader's if conflict happens**;
+- *the outdated leader wins the election*, and apply entries right after the index where he was disconnected before, this leads to an apply error: same index, different command!
 - *even if the outdated leader fails the election*, the other server that trimmed their logs and appended the outdated leader's logs would still apply the wrong command!
 
-This could happen when a leader and some of followers are disconnected, and then reconnected back to the system, those followers kick off the current leader, and rise the term of the outdated leader, the the outdated leader then starts to overwrite other followers' logs through `AppendEntries RPC`, the outdated leader didn't step down to follower until he overwrote a majority of followers' logs. Then, election begins, the outdated leader wins the election, leading to that error.
+This could happen when a leader and some of the followers are disconnected, and then reconnected back to the system, those followers kick off the current leader, and rise the term of the outdated leader. The the outdated leader then starts to overwrite other followers' logs through `AppendEntries RPC`, he didn't step down to follower until he overwrote a majority of followers' logs. Then, election begins, the outdated leader wins the election, leading to that error.
 
-Even if the outdated leader didn't win the election, as long as he overwrote some of the followers' logs before they could apply all their original logs (the ones before being overwritten) to the state machine, they could probably apply with the outdated logs later.
+Even if the outdated leader didn't win the election, as long as he overwrote any of the followers' logs before they could apply all their original logs (the ones before being overwritten) to the state machine, they could probably apply with the outdated logs later.
 
 The last but two test case for part 2B simulates the situation as we described above, read the code from test case: **Test (2B): leader backs up quickly over incorrect follower logs**, you may need to print some logs, then you will see what's going on when this problem happens.
 
@@ -58,11 +58,11 @@ According to the [Students' Guide to Raft](https://thesquareplanet.com/blog/stud
 
 > For example, if you have already voted in the current term, and an incoming `RequestVote` RPC has a higher term that you, you should *first* step down and adopt their term (thereby resetting `votedFor`), and *then* handle the RPC...
 
-- You should *first* step down and adopt a higher term.
+- You should *first* step down and adopt a higher term;
 
 - Validating the server's Identity (it could step down after received a reply from previous `AppendEntries RPC`) before send a new `AppendEntries RPC` to other server.
 
-### Part 2C
+## Part 2C
 
 ### apply error
 
@@ -72,7 +72,7 @@ According to the [Students' Guide to Raft](https://thesquareplanet.com/blog/stud
 
 Note that if your leader election and log replication procedures are pretty well implemented, persistence part (2C) should occur no error, check for your previous code or subtle bugs inside the timing you call `rf.persist()`, below is a stupid mistake I made during the experiment: 
 
-At first, I use a function to convert a server's identity to follower:
+At first, I used a function to convert a server's identity to follower:
 
 ```go
 func (rf *Raft) toFollower() {
@@ -81,7 +81,7 @@ func (rf *Raft) toFollower() {
 }
 ```
 
-Then in 2C, I add the `rf.persist()` statement to this function:
+Then in 2C, I added the `rf.persist()` statement to this function:
 
 ```go
 func (rf *Raft) toFollower() {
@@ -113,7 +113,7 @@ func Make(peers []*labrpc.ClientEnd, me int,
 }
 ```
 
-Clearly, in `Make` function, the server persist its states (inside `rf.toFollower()`) before it recovers from the previous persisted states, the new persisted states **overwrite** the old one even before it can be read. This leads to a serve malfunction: <u>the previous persisted states are overwritten with default states</u>, next time the server apply a log entry for the same apply index, it will be a totally different one from the previous applied.
+Clearly, in `Make` function, the server persist its states (inside `rf.toFollower()`) before it recovers from the previous persisted states, the new persisted states **overwrite** the old one even before it can be read. This leads to a serve malfunction: <u>the previous persisted states are overwritten by the default states</u>, next time the server apply a log entry for the same apply index, it will be a totally different one from the previous applied.
 
 #### Solution for 'apply error'
 
@@ -144,12 +144,16 @@ func Make(peers []*labrpc.ClientEnd, me int,
 
 The network is messed up during the 2C tests (to simulate server's crash and restart). Therefore your system could not be able to elect a leader or apply a specific log entry in time.
 
+#### Cause for 'failed to reach agreement'
+
+The gap between election timeout and heartbeat timeout are too small.
+
 #### Solution for 'failed to reach agreement'
 
-The solution is relatively simple, I just adjusted the arguments used in the system, for instance, modify the *<u>heartbeat time</u>* and *<u>election timeout</u>*, make sure they differ a bit from each other. I tested two groups of arguments, as below:
+The solution is relatively simple, I just adjusted the arguments used in the system, for instance, modify the *<u>heartbeat time</u>* and *<u>election timeout</u>*, make sure they differ a bit lager from each other. I tested two groups of arguments, as below:
 
-- *<u>heartbeat time</u>*: 80 ms, *<u>election timeout</u>*: 200 ~ 400 ms
-- *<u>heartbeat time</u>*: 120 ms, *<u>election timeout</u>*: 300 ~ 500 ms
+- *<u>heartbeat time</u>*: 80 ms, *<u>election timeout</u>*: 200 ~ 400 ms;
+- *<u>heartbeat time</u>*: 120 ms, *<u>election timeout</u>*: 300 ~ 500 ms.
 
 Those arguments all passed 1,000 rounds of test, but according to the requirements by [6.824](https://pdos.csail.mit.edu/6.824/labs/lab-raft.html):
 
@@ -157,9 +161,9 @@ Those arguments all passed 1,000 rounds of test, but according to the requiremen
 
 You might choose the latter group of arguments to meet the requirements.
 
-### Part 2D
+## Part 2D
 
-### hints:
+### Hints
 
 Since we would modify our code a lot in 2D, it is highly suggested that you encapsulate some useful tool functions for raft, such as `lastLogTerm()`, `lastLogIndex()`, `termAt(index int)`, `logAt(index int)`, etc.
 
@@ -175,7 +179,7 @@ One situation I discovered for causing the problem is that a disconnected leader
 
 #### Solution for 'failed to reach agreement'
 
-Later I found that this is a problem related to `lastLogTerm` and truncate logs. When a server received a snapshot from the tester, if it is not outdated, then the server accepts it and truncates its logs, here is my original implementation at first:
+Later I found that this is a problem related to `lastLogTerm` and truncate logs. When a server received a snapshot from the tester, if it is not outdated, then the server accepts it and truncates its logs, here is my original implementation:
 
 ```go
 rf.logs = append([]LogEntry{{0, 0}}, rf.logsFrom(index+1)...)
@@ -202,7 +206,7 @@ rf.logs = append([]LogEntry{{0, 0}}, rf.logsFrom(index+1)...)
 rf.snapshotLastIndex = index
 ```
 
-Why can't we update `snapshotLastIndex` before truncating logs ? Because the `logsFrom(index)` implementation depends on it:
+Why can't we update `snapshotLastIndex` before truncating logs? Because the `logsFrom(index)` implementation depends on it:
 
 ```go
 func (rf *Raft) logsFrom(begin int) []LogEntry {
@@ -210,7 +214,7 @@ func (rf *Raft) logsFrom(begin int) []LogEntry {
 }
 ```
 
-Moreover, after we introduce the log compaction machanism, there will be plenty of issues like this. For example, if you want to retrieve a log entry at specific index, you can't just do `rf.logs[index]`, it needs to be transformed to the "real" index, using a tool function like below:
+Moreover, after we introduced the log compaction machanism, there will be plenty of issues like this. For example, if you want to retrieve a log entry at specific index, you can't just do `rf.logs[index]`, it needs to be transformed to the "real" index, using a tool function like below:
 
 ```go
 func (rf *Raft) actualIndex(index int) int {
@@ -244,5 +248,57 @@ You might encounter other weird problems, such as 'apply error', 'apply out of o
 2. Persist not only the raft's persistent states, but also with the new added `snapshotLastIndex` and `snapshotLastTerm`, these are critical when your server comes back after a crash;
 3. Persist snapshot along with those states mentioned in 2 whenever you receive and apply a snapshot.
 
-## About test
+# About test
 
+I modified a shell script for test, stored in `src/raft/go-race-many.sh`, originated from [here](https://gist.github.com/jonhoo/f686cacb4b9fe716d5aa), much appreciate to [Jon Gjengset](https://gist.github.com/jonhoo).
+
+## How does it work?
+
+> The shell script just compile all the tests into a binary file (tester) first, and then run the file multiple times at once to create several processes (a batch). When a batch is running over, the script will move on and create another batch, this progress repeats over and over again until all batches are done.
+>
+> When a tester process (round) is running, it will create two files in ./test-results: test-\*.log, test-\*.err, the former file records normal outputs for this round, and the latter records the error messages (if any).
+
+## How to use it?
+
+To see help information about this script, just run:
+
+```bash
+./go-race-many.sh -h
+```
+
+Here is an example of its usage:
+
+```bash
+./go-race-many.sh -r 1024 -p 16 -t '2[ABCD]' -c -race
+```
+
+The command above indicates: run tests that matches the pattern /2[ABCD]/ (in regex) for 1024 rounds, 16 processes at each batch, clear all files in results directory before running, and enable go's data race detector while running these tests.
+
+### Hints
+
+- Don't set too many processes for a batch! Doing so could lead to process starvation and fail the test (especially in **Test (2C): Figure 8 (unreliable)**);
+- Even not setting too many processes for a batch, you could still encounter 'failed to reach agreement' (timeout) in **Test (2C): Figure 8 (unreliable)** using this script. This could be caused by the pressures that CPU handles, for instance, if there is a point where CPU has been taken by other processes (not tester) and its usage serged, then our tester may timeout;
+- If you do have 'failed to reach agreement' problem in **Test (2C): Figure 8 (unreliable)**, and it is the only problem in your batch test, then I suggest you follow the workaround below.
+
+### 'failed to reach agreement' with test script workaround
+
+Normally this problem appears in **Test (2C): Figure 8 (unreliable)**, because that test is pretty strict about the time you consumed, processes dispatch could leads to timeout.
+
+0. If this occurs with low frequency, let's say 1 ~ 5 times every 500 ~ 1000 rounds. Then I suggest that you just ignore it, because it is probably not a problem at your end;
+1. If this occurs with middle frequency, let's say about 5 ~ 10 times every 100 ~ 200 rounds. Then I suggest you lowering the number of your processes for a single batch, for example, if you initially use `-p 16`, try `-p 8`, and if it doesn't improve the situation, try `-p 4`, keep doing this until you have found a stable configuration for your platform;
+2. If this occurs even with `-p 1` set (single process at a time), then you might need to check your code to see if there is something wrong, good luck with that!
+
+### Configuration examples
+
+In src/raft/test-scripts, I wrote some shell scripts to run test for each part:
+
+```bash
+total 20K
+-rw-rw-r-- 1 yjzzjy4 yjzzjy4 128 Jul 18 00:01 test-2A.sh
+-rw-rw-r-- 1 yjzzjy4 yjzzjy4 128 Jul 18 00:01 test-2B.sh
+-rw-rw-r-- 1 yjzzjy4 yjzzjy4  65 Jul 18 00:01 test-2C.sh
+-rw-rw-r-- 1 yjzzjy4 yjzzjy4 127 Jul 25 14:33 test-2D.sh
+-rw-rw-r-- 1 yjzzjy4 yjzzjy4  71 Jul 25 14:33 test-lab2.sh
+```
+
+**Part 2C is the most strict one**, the main problem is timeout: `'failed to reach agreement' in Test (2C): Figure 8 (unreliable)`. You can barely pass all rounds of 2C in a large scale test (1000+ rounds) by setting batch processes more than the number of your CPU's logical cores, while other parts' tests are relatively loose. Note that different platforms could handle different configurations, during my test, AMD Ryzen 7 4800U seems to be less stable than the Intel i7 8750H. Test and modify these configurations to find out the most suitable ones for your platform.

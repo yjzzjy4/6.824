@@ -26,6 +26,7 @@ import (
 	"6.824/labrpc"
 )
 
+//
 // ApplyMsg
 // as each Raft peer becomes aware that successive log entries are
 // committed, the peer should send an ApplyMsg to the service (or
@@ -49,6 +50,7 @@ type ApplyMsg struct {
 	SnapshotIndex int
 }
 
+//
 // LogEntry
 // Struct for holding log entry.
 //
@@ -57,6 +59,7 @@ type LogEntry struct {
 	Command interface{}
 }
 
+//
 // Raft
 // A Go object implementing a single Raft peer.
 //
@@ -93,13 +96,15 @@ type Raft struct {
 	state         State         // raft state
 	leaderId      int           // used by follower for redirecting client's request to leader
 	heartBeatTime time.Time     // last heartbeat time
-	applyMsgCh    chan ApplyMsg // to inform the service (or test-results) whether there are newly committed entries in this peer
-	applyCond     *sync.Cond    // condition to trigger apply log entry
+	applyMsgCh    chan ApplyMsg // to inform the service (or tester) whether there are newly committed entries in this peer
+	applyCond     *sync.Cond    // condition to trigger apply log entry event
 }
 
+//
 // GetState
 // return currentTerm and whether this server
 // believes it is the leader.
+//
 func (rf *Raft) GetState() (int, bool) {
 	// Your code here (2A).
 	rf.mu.Lock()
@@ -107,6 +112,7 @@ func (rf *Raft) GetState() (int, bool) {
 	return rf.currentTerm, rf.state == LEADER
 }
 
+//
 // Start
 // the service using Raft (e.g. a k/v server) wants to start
 // agreement on the next command to be appended to Raft's log. if this
@@ -138,6 +144,7 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 	return rf.lastLogIndex(), rf.currentTerm, true
 }
 
+//
 // Kill
 // the test-results doesn't halt goroutines created by Raft after each test,
 // but it does call the Kill() method. your code can use killed() to
@@ -159,6 +166,7 @@ func (rf *Raft) killed() bool {
 	return z == 1
 }
 
+//
 // Make
 // the service or test-results wants to create a Raft server. the ports
 // of all the Raft servers (including this one) are in peers[]. this
